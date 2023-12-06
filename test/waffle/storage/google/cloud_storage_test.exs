@@ -11,12 +11,14 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
 
   def random_name(_) do
     name = 8 |> :crypto.strong_rand_bytes() |> Base.encode16()
-    %{name: name, path: "#{@remote_dir}/#{name}.png"}
+    %{name: "#{name}.png", path: "#{@remote_dir}/#{name}.png"}
   end
 
   def create_wafile(_), do: %{wafile: Waffle.File.new(@file_path, DummyDefinition)}
 
   def setup_waffle(%{wafile: file, name: name}) do
+    file = Map.put(file, :file_name, name)
+
     %{
       definition: DummyDefinition,
       version: :original,
@@ -132,7 +134,7 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
       Application.put_env(:waffle, :asset_host, "cdn-domain.com")
 
       assert CloudStorage.url(def, ver, meta) ==
-               "https://cdn-domain.com/#{@remote_dir}/#{name}.png"
+               "https://cdn-domain.com/#{@remote_dir}/#{name}"
 
       Application.delete_env(:waffle, :asset_host)
     end
