@@ -2,9 +2,9 @@ name: Elixir CI
 
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]
   pull_request:
-    branches: [ master ]
+    branches: [ main ]
 
 env:
   GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
@@ -19,36 +19,32 @@ jobs:
     strategy:
       matrix:
         include:
-          - elixir: 1.9.4
-            otp: 21.3.8.24
+          - elixir: '1.12'
+            otp: '24'
 
-          - elixir: 1.10.4
-            otp: 21.3.8.24
+          - elixir: '1.13'
+            otp: '24'
 
-          - elixir: 1.11.4
-            otp: 21.3.8.24
+          - elixir: '1.14'
+            otp: '25'
 
-          - elixir: 1.11.4
-            otp: 23.3.4.4
+          - elixir: '1.15'
+            otp: '26'
 
-          - elixir: 1.12.2
-            otp: 24.0.3
-
-          - elixir: 1.14.3
-            otp: 25.2.2
-
+          - elixir: '1.16'
+            otp: '26'
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
 
     - name: Set up Elixir
       uses: erlef/setup-beam@v1
+      id: beam
       with:
         elixir-version: ${{ matrix.elixir }}
         otp-version: ${{ matrix.otp }}
-        version-type: strict
 
     - name: Restore dependencies cache
-      uses: actions/cache@v2
+      uses: actions/cache@v4
       id: mix-cache
       with:
         path: deps
