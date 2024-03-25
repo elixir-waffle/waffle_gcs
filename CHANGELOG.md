@@ -1,7 +1,7 @@
 # Changelog
 
 
-## [Unreleased] - 2024-02-xx
+## [0.2.1] - 2024-03-25
 
 ### Changed
 
@@ -11,15 +11,18 @@
 - Bump `ex_doc` from `0.25` to `0.31`
 - Bump `dialyxir` from `1.1.0` to `1.4.3`
 
-### Added
--
 
 ### Removed
 
-- **Breaking:** drop support for Elixir versions `< v1.12`
+- **Breaking:** drop maintenance support for Elixir versions `< v1.12`
+- remove `Waffle.Storage.Google.CloudStorage.fullname/3` as it was a wrapper
+  - Please use `Waffle.Definition.Versioning.resolve_file_name/3` directly instead
+
 
 ### Fixed
--
+- fix `resolve_file_name` being called twice in certain scenarios [#1](https://github.com/elixir-waffle/waffle_gcs/pull/1)
+  - remove `Waffle.Storage.Google.CloudStorage.fullname/3`. Please use `Waffle.Definition.Versioning.resolve_file_name/3` directly instead
+  - changes `Waffle.Storage.Google.CloudStorage.path_for/3` to use the `:file_name` key
 
 
 ## [0.2.0] - 2021-08-20
