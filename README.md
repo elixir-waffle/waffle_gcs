@@ -1,5 +1,7 @@
 # Waffle GCS
 
+[![Hex.pm Version](https://img.shields.io/hexpm/v/waffle_gcs)](https://hex.pm/packages/waffle_gcs)
+[![waffle_gcs documentation](http://img.shields.io/badge/hexdocs-documentation-brightgreen.svg)](https://hexdocs.pm/waffle_gcs)
 [![Build Status](https://github.com/elixir-waffle/waffle_gcs/actions/workflows/elixir.yml/badge.svg?branch=main)](https://github.com/elixir-waffle/waffle_gcs/actions)
 
 Google Cloud Storage for Waffle
