@@ -43,6 +43,7 @@ Add it to your mix dependencies:
 ```elixir
 defp deps do
   [
+    {:goth, "~> 1.3"},
     {:waffle_gcs, "~> 0.2"}
   ]
 end
@@ -56,7 +57,8 @@ All configuration values are stored under the `:waffle` app key. E.g.
 config :waffle,
   storage: Waffle.Storage.Google.CloudStorage,
   bucket: "gcs-bucket",
-  storage_dir: "uploads/waffle"
+  storage_dir: "uploads/waffle",
+  token_fetcher: MyApp.WaffleTokenFetcher
 ```
 
 **Note**: a valid bucket name is a required config. This can either be a
@@ -66,32 +68,40 @@ module (e.g. `def bucket(), do: "my-bucket"`).
 
 Authentication is done through Goth which requires credentials (https://github.com/peburrows/goth#installation).
 
-### Custom Token Generation ###
+### Goth >= 1.3 ###
 
-By default, the credentials provided to Goth will be used to generate tokens.
-If you have multiple sets of credentials in Goth or otherwise need more control
-over token generation, you can define your own module:
+For newer versions of Goth, you **must** provide the token fetcher module, for example:
 
 ```elixir
-defmodule MyCredentials do
+defmodule MyApp.WaffleTokenFetcher do
   @behaviour Waffle.Storage.Google.Token.Fetcher
-  @impl Waffle.Storage.Google.Token.Fetcher
-  def get_token(scopes) when is_list(scopes), do: get_token(Enum.join(scopes, " "))
-  @impl Waffle.Storage.Google.Token.Fetcher
-  def get_token(scope) when is_binary(scope) do
-    {:ok, token} = Goth.Token.for_scope({"my-user@my-gcs-account.com", scope})
-    token.token
+
+  @impl true
+  def get_token(_scope) when is_binary(_scope) do
+    Goth.fetch!(MyApp.Goth).token
   end
 end
 ```
 
-And configure it to use this new module instead of the default token generation:
+And configure it to use your module:
 
 ```elixir
 config :waffle,
   storage: Waffle.Storage.Google.CloudStorage,
   bucket: "gcs-bucket-name",
-  token_fetcher: MyCredentials
+  token_fetcher: MyApp.WaffleTokenFetcher
+```
+
+### Goth < 1.3 ###
+
+You can use the Goth 1.1 token fetcher that reads the default credentials from
+Goth.
+
+```elixir
+config :waffle,
+  storage: Waffle.Storage.Google.CloudStorage,
+  bucket: "gcs-bucket-name",
+  token_fetcher: Waffle.Storage.Googke.Token.Fetcher.GothTokenFetcher
 ```
 
 ## URL Signing
