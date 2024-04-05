@@ -103,7 +103,7 @@ Goth.
 config :waffle,
   storage: Waffle.Storage.Google.CloudStorage,
   bucket: "gcs-bucket-name",
-  token_fetcher: Waffle.Storage.Googke.Token.Fetcher.GothTokenFetcher
+  token_fetcher: Waffle.Storage.Google.Token.GothTokenFetcher
 ```
 
 ## URL Signing
