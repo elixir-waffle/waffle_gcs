@@ -39,7 +39,7 @@ defmodule Waffle.Storage.Google.CloudStorage.MixProject do
   defp docs do
     [
       main: "readme",
-      extras: ["README.md", "CHANGELOG.md"]
+      extras: ["README.md", "CHANGELOG.md", "UPGRADING.md"]
     ]
   end
 
