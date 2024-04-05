@@ -6,7 +6,7 @@ defmodule Waffle.Storage.Google.CloudStorage.MixProject do
       app: :waffle_gcs,
       name: "Waffle GCS",
       description: description(),
-      version: "0.2.0",
+      version: "0.3.0",
       elixir: "~> 1.13",
       elixirc_paths: elixirc_paths(Mix.env()),
       deps: deps(),
