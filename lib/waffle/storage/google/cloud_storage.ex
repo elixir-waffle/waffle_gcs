@@ -29,7 +29,11 @@ defmodule Waffle.Storage.Google.CloudStorage do
   """
   @spec put(Types.definition(), Types.version(), Types.meta()) :: object_or_error
   def put(definition, version, meta) do
-    path = path_for(definition, version, meta)
+    {file, _scope} = meta
+    destination_dir = storage_dir(definition, version, meta)
+    # Explicitly not `path_for`.
+    # Waffle will have already called `Versioning.resolve_file_name` when calling `definition.store`
+    path = Path.join(destination_dir, file.file_name)
     acl = definition.acl(version, meta)
 
     gcs_options =
