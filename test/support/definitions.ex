@@ -1,28 +1,27 @@
-defmodule DummyDefBase do
-  defmacro __using__(_) do
-    quote do
-      use Waffle.Definition
-
-      def acl(_, {_, :private}), do: :private
-
-      def filename(_, {file, :private}),
-        do: Path.basename(file.file_name, Path.extname(file.file_name))
-
-      def filename(_, {_, name}) when is_binary(name), do: name
-
-      def storage_dir(_, _), do: "waffle-gcs-test"
-
-      defoverridable acl: 2, filename: 2, storage_dir: 2
-    end
-  end
-end
-
 defmodule DummyDefinition do
-  use DummyDefBase
+  use Waffle.Definition
+
+  def acl(_, {_, :private}), do: :private
+
+  def filename(_, {file, :private}),
+    do: Path.basename(file.file_name, Path.extname(file.file_name))
+
+  def filename(_, {_, name}) when is_binary(name), do: name
+
+  def storage_dir(_, _), do: "uploads"
 end
 
 defmodule DummyDefinitionInvalidBucket do
-  use DummyDefBase
+  use Waffle.Definition
+
+  def acl(_, {_, :private}), do: :private
+
+  def filename(_, {file, :private}),
+    do: Path.basename(file.file_name, Path.extname(file.file_name))
+
+  def filename(_, {_, name}) when is_binary(name), do: name
+
+  def storage_dir(_, _), do: "uploads"
 
   def bucket(), do: "invalid"
 end
@@ -32,7 +31,7 @@ defmodule NewDummyDefinition do
 
   # @acl :public_read
   @acl [%{entity: "allUsers", role: "READER"}]
-  def storage_dir(_, _), do: "waffle-gcs-test/uploads"
+  def storage_dir(_, _), do: "uploads"
   def acl(_, {_, :private}), do: :private |> IO.inspect(label: "HERE")
 
   def gcs_object_headers(:original, {_, :with_content_type}),
@@ -86,7 +85,7 @@ defmodule DefinitionWithScope do
   use Waffle.Definition
   # @acl :public_read
   @acl [%{entity: "allUsers", role: "READER"}]
-  def storage_dir(_, {_, scope}), do: "waffle-gcs-test/uploads/with_scopes/#{scope.id}"
+  def storage_dir(_, {_, scope}), do: "uploads/with_scopes/#{scope.id}"
 end
 
 defmodule DefinitionWithBucket do

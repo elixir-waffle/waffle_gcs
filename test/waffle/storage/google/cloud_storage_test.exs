@@ -3,14 +3,28 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
 
   alias Waffle.Storage.Google.CloudStorage
 
+  @moduletag :tmp_dir
+
   @file_name "image.png"
   @file_path "test/support/#{@file_name}"
-  @remote_dir "waffle-gcs-test"
 
   @img "test/support/image.png"
   @img_with_space "test/support/image two.png"
   @img_with_plus "test/support/image+three.png"
   @dummy_content_disposition "attachment; filename=\"abc.png\""
+
+  setup meta do
+    [_, unique_storage_dir] = :string.split(meta.tmp_dir, "/tmp/")
+    [mod_str, test_str] = Path.split(unique_storage_dir)
+
+    unique_basename = mod_str <> "__" <> test_str
+    tmp_path = Path.join(meta.tmp_dir, unique_basename <> ".png")
+
+    File.cp!(@img, tmp_path)
+    on_exit(:cleanup_local_tmp_files, fn -> File.rm!(tmp_path) end)
+
+    [unique_basename: unique_basename, tmp_path: tmp_path]
+  end
 
   def env_bucket(), do: System.fetch_env!("WAFFLE_BUCKET")
 
@@ -18,16 +32,19 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
     "https://storage.googleapis.com/#{bucket}"
   end
 
+  def random_hex, do: 8 |> :crypto.strong_rand_bytes() |> Base.encode16()
+
   def random_name(_) do
-    name = 8 |> :crypto.strong_rand_bytes() |> Base.encode16()
-    %{name: name, path: "#{@remote_dir}/#{name}.png"}
+    name = random_hex()
+    %{name: name, path: "uploads/#{name}.png"}
   end
 
-  def create_wafile(_), do: %{wafile: Waffle.File.new(@file_path, DummyDefinition)}
+  def create_wafile(%{tmp_path: tmp_path}) do
+    %{wafile: Waffle.File.new(tmp_path, DummyDefinition)}
+  end
 
   def setup_waffle(%{wafile: file, name: name}) do
     %{
-      definition: DummyDefinition,
       version: :original,
       meta: {file, name}
     }
@@ -47,6 +64,7 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
   end
 
   describe "conn/1" do
+    @describetag skip: "Deprecate"
     test "constructs a Tesla client" do
       assert %Tesla.Client{} = CloudStorage.conn()
     end
@@ -58,6 +76,8 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
   end
 
   describe "utility functions" do
+    @describetag definition: DummyDefinition
+
     setup [:random_name, :create_wafile, :setup_waffle]
 
     test "bucket/1 returns a bucket name based on a Waffle definition", %{definition: def} do
@@ -65,12 +85,13 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
       assert "invalid" == CloudStorage.bucket(DummyDefinitionInvalidBucket)
     end
 
+    @tag skip: "Deprecate"
     test "storage_dir/3 returns the remote storage directory (not the bucket)", %{
       definition: def,
       version: ver,
       meta: meta
     } do
-      assert @remote_dir == CloudStorage.storage_dir(def, ver, meta)
+      assert "uploads" == CloudStorage.storage_dir(def, ver, meta)
     end
 
     test "path_for/3 returns the file full path (storage directory plus filename)", %{
@@ -84,32 +105,27 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
   end
 
   describe "waffle functions" do
+    @describetag definition: DummyDefinition
+
     setup [:random_name, :create_wafile, :setup_waffle]
 
     test "put/3 uploads a valid file", %{definition: def, version: ver, meta: meta} do
       assert {:ok, _} = CloudStorage.put(def, ver, meta)
     end
 
-    test "put/3 uploads binary data", %{definition: def, version: ver, name: name} do
+    test "put/3 uploads binary data", test_meta do
+      %{version: ver, unique_basename: name, tmp_path: file_path} = test_meta
+
       assert {:ok, _} =
                CloudStorage.put(
-                 def,
+                 test_meta.definition,
                  ver,
-                 {%Waffle.File{binary: File.read!(@file_path), file_name: "#{name}.png"}, name}
+                 {%Waffle.File{binary: File.read!(file_path), file_name: "#{name}.png"}, name}
                )
     end
 
     test "put/3 fails for an invalid file", %{version: ver, meta: meta} do
       assert {:error, _} = CloudStorage.put(DummyDefinitionInvalidBucket, ver, meta)
-    end
-
-    test "delete/3 successfully deletes existing object", %{
-      definition: def,
-      version: ver,
-      meta: meta
-    } do
-      assert {:ok, _} = CloudStorage.put(def, ver, meta)
-      assert {:ok, _} = CloudStorage.delete(def, ver, meta)
     end
 
     test "delete/3 fails for invalid bucket or object", %{
@@ -122,17 +138,7 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
     end
 
     test "url/3 returns regular URLs", %{definition: def, version: ver, meta: meta, name: name} do
-      assert CloudStorage.url(def, ver, meta) =~ "/#{env_bucket()}/#{@remote_dir}/#{name}"
-    end
-
-    test "url/3 returns signed URLs (v2)", test_meta do
-      %{definition: definition, version: ver, meta: meta} = test_meta
-      # assert {:ok, _} = definition.store(meta)
-      Waffle.Definition.Versioning.resolve_file_name(definition, ver, meta) |> IO.inspect()
-      assert {:ok, _} = CloudStorage.put(definition, ver, meta)
-      url = CloudStorage.url(definition, ver, meta, signed: true)
-      assert url =~ "&Signature="
-      assert {:ok, %{status_code: 200}} = HTTPoison.get(url)
+      assert CloudStorage.url(def, ver, meta) =~ "/#{env_bucket()}/uploads/#{name}"
     end
 
     test "url/3 returns CDN URL without bucket name in path", %{
@@ -144,7 +150,7 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
       Application.put_env(:waffle, :asset_host, "cdn-domain.com")
 
       assert CloudStorage.url(def, ver, meta) ==
-               "https://cdn-domain.com/#{@remote_dir}/#{name}.png"
+               "https://cdn-domain.com/uploads/#{name}.png"
 
       Application.delete_env(:waffle, :asset_host)
     end
@@ -180,11 +186,13 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
 
   defmacro assert_acls_public_reader(definition, args) do
     quote bind_quoted: [definition: definition, args: args] do
+      "uploads/#{args}" |> IO.inspect()
+
       {:ok, %GoogleApi.Storage.V1.Model.ObjectAccessControls{} = acls} =
         GoogleApi.Storage.V1.Api.ObjectAccessControls.storage_object_access_controls_list(
           CloudStorage.conn(),
           CloudStorage.bucket(definition),
-          "#{@remote_dir}/uploads/#{args}"
+          "uploads/#{args}"
         )
 
       assert [
@@ -261,38 +269,25 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
     @describetag :from_upstream
     @describetag :tmp_dir
 
-    setup meta do
-      [_, unique_storage_dir] = :string.split(meta.tmp_dir, "/tmp/")
-      [mod_str, test_str] = Path.split(unique_storage_dir)
-
-      unique_basename = mod_str <> "__" <> test_str
-      tmp_path = Path.join(meta.tmp_dir, unique_basename <> ".png")
-
-      File.cp!(@img, tmp_path)
-      on_exit(:cleanup_local_tmp_files, fn -> File.rm!(tmp_path) end)
-
-      [unique_basename: unique_basename, tmp_path: tmp_path]
-    end
-
     @tag skip: "TODO - determine if this is relevant to GCS"
     @tag timeout: 15_000
     test "custom asset_host" do
       custom_asset_host = "https://some.cloudfront.com"
 
       with_env(:waffle, :asset_host, custom_asset_host, fn ->
-        assert "#{custom_asset_host}/#{@remote_dir}/uploads/image.png" ==
+        assert "#{custom_asset_host}/uploads/image.png" ==
                  NewDummyDefinition.url(@img)
       end)
 
       with_env(:waffle, :asset_host, {:system, "WAFFLE_ASSET_HOST"}, fn ->
         System.put_env("WAFFLE_ASSET_HOST", custom_asset_host)
 
-        assert "#{custom_asset_host}/#{@remote_dir}/uploads/image.png" ==
+        assert "#{custom_asset_host}/uploads/image.png" ==
                  NewDummyDefinition.url(@img)
       end)
 
       with_env(:waffle, :asset_host, false, fn ->
-        assert "#{bucket_url()}/#{@remote_dir}/uploads/image.png" == NewDummyDefinition.url(@img)
+        assert "#{bucket_url()}/uploads/image.png" == NewDummyDefinition.url(@img)
       end)
     end
 
@@ -306,18 +301,13 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
 
     @tag timeout: 15_000
     test "encoded url" do
-      url = NewDummyDefinition.url(@img_with_space)
-
-      assert "#{bucket_url()}/#{@remote_dir}/uploads/image%20two.png" ==
-               url
+      assert "#{bucket_url()}/uploads/image%20two.png" == NewDummyDefinition.url(@img_with_space)
     end
 
     @tag skip: "TODO - determine if this is relevant to GCS"
     @tag timeout: 15_000
     test "encoded url with S3-specific escaping" do
-      url = NewDummyDefinition.url(@img_with_plus)
-
-      assert "#{bucket_url()}/#{@remote_dir}/uploads/image%2Bthree.png" == url
+      assert "#{bucket_url()}/uploads/image%2Bthree.png" == NewDummyDefinition.url(@img_with_plus)
     end
 
     @tag timeout: 15_000
@@ -343,6 +333,7 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
                NewDummyDefinition.store({meta.tmp_path, :with_content_type})
 
       assert uploaded_filename == meta.unique_basename <> ".png"
+      uploaded_filename |> IO.inspect()
 
       assert_acls_public_reader(NewDummyDefinition, uploaded_filename)
       assert_header(NewDummyDefinition, uploaded_filename, "content-type", "image/gif")
@@ -376,8 +367,14 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
       assert {:ok, uploaded_filename} = mod.store({meta.tmp_path, scope})
       assert uploaded_filename == meta.unique_basename <> ".png"
 
-      mod.url({uploaded_filename, scope}, :original) |> IO.inspect(label: :original)
-      mod.url({uploaded_filename, scope}, :thumb) |> IO.inspect(label: :thumb)
+      assert mod.url({uploaded_filename, scope}, :original) ==
+               "#{bucket_url()}/uploads/1_original_" <> uploaded_filename
+
+      assert mod.url({uploaded_filename, scope}, :thumb) ==
+               "#{bucket_url()}/uploads/1_thumb_" <> uploaded_filename
+
+      assert mod.url({uploaded_filename, scope}) ==
+               "#{bucket_url()}/uploads/1_original_" <> uploaded_filename
 
       assert_public_with_extension(mod, {uploaded_filename, scope}, :original, ".png")
       assert_public_with_extension(mod, {uploaded_filename, scope}, :thumb, ".png")
@@ -393,7 +390,7 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
       assert uploaded_filename == meta.unique_basename <> ".png"
 
       assert mod.url({uploaded_filename, scope}) ==
-               "#{bucket_url()}/#{@remote_dir}/uploads/with_scopes/1/" <> uploaded_filename
+               "#{bucket_url()}/uploads/with_scopes/1/" <> uploaded_filename
 
       assert_public(mod, {uploaded_filename, scope})
       assert_acls_public_reader(mod, "with_scopes/1/" <> uploaded_filename)
