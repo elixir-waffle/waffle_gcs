@@ -5,18 +5,17 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-
-env:
-  GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
-  WAFFLE_BUCKET: ${{ secrets.WAFFLE_BUCKET }}
+  workflow_dispatch:
 
 jobs:
-  build:
-
-    name: Build and test (OTP ${{ matrix.otp }} | Elixir ${{ matrix.elixir }})
+  # Offline tests: no secrets, so this runs everywhere — including fork PRs.
+  unit:
+    name: Unit / offline (OTP ${{ matrix.otp }} | Elixir ${{ matrix.elixir }})
     runs-on: ubuntu-latest
 
     strategy:
+      # One version's failure shouldn't hide the others' results.
+      fail-fast: false
       matrix:
         include:
           - elixir: '1.13'
@@ -56,8 +55,66 @@ jobs:
       env:
         MIX_ENV: test
 
+    # Formatter output is only stable within an Elixir version, so check it
+    # once on the newest matrix entry rather than on all of them.
     - name: Check Formatting
+      if: matrix.elixir == '1.16'
       run: mix format --check-formatted
 
-    - name: Run tests
+    # MIX_ENV is explicit because `def cli` (which maps test.unit -> :test)
+    # only takes effect on Elixir >= 1.15.
+    - name: Run offline unit tests
+      run: mix test.unit
+      env:
+        MIX_ENV: test
+
+  # Full suite against real GCS. Secrets don't exist on fork PRs, so this only
+  # runs for pushes, manual dispatches, and PRs from branches in this repo.
+  # Version compatibility is the unit matrix's job; this runs one modern pair.
+  integration:
+    name: Integration / real GCS (OTP ${{ matrix.otp }} | Elixir ${{ matrix.elixir }})
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+
+    env:
+      GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+      WAFFLE_BUCKET: ${{ secrets.WAFFLE_BUCKET }}
+      WAFFLE_BUCKET2: ${{ secrets.WAFFLE_BUCKET2 }}
+      # Job-unique object prefix: concurrent workflow runs share the test
+      # buckets without touching each other's objects, and the after-suite
+      # cleanup only deletes this run's prefix (see test/support/test_run.ex).
+      WAFFLE_TEST_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+
+    strategy:
+      matrix:
+        include:
+          - elixir: '1.16'
+            otp: '26'
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Elixir
+      uses: erlef/setup-beam@v1
+      id: beam
+      with:
+        elixir-version: ${{ matrix.elixir }}
+        otp-version: ${{ matrix.otp }}
+
+    - name: Restore dependencies cache
+      uses: actions/cache@v4
+      id: mix-cache
+      with:
+        path: deps
+        key: ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles('**/mix.lock') }}
+        restore-keys: ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-
+
+    - name: Install dependencies
+      run: mix deps.get --only test
+
+    # ubuntu-24.04 runner images no longer ship ImageMagick; the transform
+    # tests shell out to `convert`.
+    - name: Install ImageMagick
+      run: sudo apt-get update -q && sudo apt-get install -y --no-install-recommends imagemagick
+
+    - name: Run full suite (integration hits real GCS)
       run: mix test
