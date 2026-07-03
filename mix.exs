@@ -9,6 +9,7 @@ defmodule Waffle.Storage.Google.CloudStorage.MixProject do
       version: "0.2.0",
       elixir: "~> 1.4",
       elixirc_paths: elixirc_paths(Mix.env()),
+      aliases: aliases(),
       deps: deps(),
       package: package(),
       source_url: "https://github.com/almirsarajcic/waffle_gcs",
@@ -16,9 +17,21 @@ defmodule Waffle.Storage.Google.CloudStorage.MixProject do
     ]
   end
 
+  # Run the test.* aliases in the :test environment.
+  def cli do
+    [preferred_envs: ["test.unit": :test]]
+  end
+
   # Specifies which paths to compile per environment.
   defp elixirc_paths(:test), do: ["lib", "test/support"]
   defp elixirc_paths(_), do: ["lib"]
+
+  # `mix test.unit` runs only the fast, offline unit tests (no GCS creds needed).
+  defp aliases do
+    [
+      "test.unit": ["test --exclude integration"]
+    ]
+  end
 
   defp description do
     "Google Cloud Storage integration for Waffle file uploader library."
