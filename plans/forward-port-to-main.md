@@ -121,6 +121,12 @@ token story. It is orthogonal to issue #25.
 
 Cherry-pick in order: `6756769` → `394dbad` → `8cc2eb7` → `d9f3344`.
 
+**Fixture-image gotcha (found during execution):** the images the feature suite
+references (`image two.png`, `image+three.png`, the updated `image.png`, and
+`invalid_image.png`) live in `9bb1eef`, not in the four test commits. Pull them
+across separately (`git checkout <sha> -- 'test/support/image*' ...`) before
+running the suite.
+
 What each brings, and what to watch:
 
 - **`6756769` (shared infra):** adds `test/support/gcs_case.ex`

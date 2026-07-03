@@ -16,6 +16,12 @@ a gate for the next; nothing later starts until the stage before it holds.
 | [client-rewrite.md](client-rewrite.md) | Replacing google_api_storage/google_gax/legacy-Goth with a minimal hand-rolled client; swappable transport, signer-as-adapter, token seam | #39 (+ #14, #16, #18) |
 | [migration-and-repair.md](migration-and-repair.md) | `mix waffle_gcs.repair` for doubled filenames, igniter tasks, migration guides | #40 (+ #20, #25) |
 
+## Priority (2026-07-03)
+
+Within the v0.3 milestone, work **#35** (cleanup safety), **#36** (CI
+hardening), and **#37** (test-gap checklist) first — they make every subsequent
+change verifiable and safe to iterate on.
+
 ## Sequencing rules
 
 1. **0.3 ships on the current Google deps.** The rewrite is not coupled to 0.3;
