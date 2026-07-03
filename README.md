@@ -137,3 +137,29 @@ end
 ```
 
 It will be used as `optional_params` argument in gcs request. List of all supported attributes can be found here: https://hexdocs.pm/google_api_storage/GoogleApi.Storage.V1.Api.Objects.html#storage_objects_insert_simple/7
+
+## Running the tests
+
+The unit tests run offline with no configuration:
+
+```
+mix test.unit          # == mix test --exclude integration
+```
+
+The integration tests upload to real Google Cloud Storage and need a bucket and
+service-account credentials in the environment (a second bucket is used by the
+bucket-from-scope test):
+
+```
+export WAFFLE_BUCKET=your-test-bucket
+export WAFFLE_BUCKET2=your-second-test-bucket
+export GCP_CREDENTIALS="$(cat /path/to/service-account.json)"
+
+mix test                                          # everything
+mix test --only integration                       # only the GCS round-trips
+mix test --include double_filename_regression     # the issue #25 regression
+mix test --include bucket_with_file_and_scope     # a 0.3-gated behavior
+```
+
+Test objects are removed from the bucket after the suite runs. See the tag
+taxonomy at the top of `test/test_helper.exs` for the full list of tags.
