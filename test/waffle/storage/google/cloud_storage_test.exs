@@ -21,20 +21,24 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
   describe "storage_dir/3" do
     test "returns the definition's storage directory (not the bucket)" do
       meta = {%Waffle.File{file_name: "image.png"}, nil}
-      assert "uploads" == CloudStorage.storage_dir(GCSTest.PublicUpload, :original, meta)
+
+      assert GCSTest.Run.storage_dir() ==
+               CloudStorage.storage_dir(GCSTest.PublicUpload, :original, meta)
     end
   end
 
   describe "path_for/3" do
     test "joins the storage directory and the resolved filename" do
       meta = {%Waffle.File{file_name: "image.png"}, nil}
-      assert "uploads/image.png" == CloudStorage.path_for(GCSTest.PublicUpload, :original, meta)
+
+      assert "#{GCSTest.Run.storage_dir()}/image.png" ==
+               CloudStorage.path_for(GCSTest.PublicUpload, :original, meta)
     end
 
     test "applies a custom filename/2 exactly once" do
       meta = {%Waffle.File{file_name: "image.png"}, %{id: 7}}
 
-      assert "uploads/7_image.png" ==
+      assert "#{GCSTest.Run.storage_dir()}/7_image.png" ==
                CloudStorage.path_for(GCSTest.WithCustomFilename, :original, meta)
     end
   end
@@ -103,7 +107,7 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
       bucket = System.fetch_env!("WAFFLE_BUCKET")
 
       assert CloudStorage.url(GCSTest.PublicUpload, :original, meta) =~
-               "/#{bucket}/uploads/#{name}"
+               "/#{bucket}/#{GCSTest.Run.storage_dir()}/#{name}"
     end
 
     @tag timeout: 15_000
@@ -114,7 +118,7 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
       Application.put_env(:waffle, :asset_host, "cdn-domain.com")
 
       assert CloudStorage.url(GCSTest.PublicUpload, :original, meta) ==
-               "https://cdn-domain.com/uploads/#{name}.png"
+               "https://cdn-domain.com/#{GCSTest.Run.storage_dir()}/#{name}.png"
 
       Application.delete_env(:waffle, :asset_host)
     end

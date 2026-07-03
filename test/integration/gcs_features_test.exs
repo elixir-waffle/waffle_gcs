@@ -85,7 +85,7 @@ defmodule Waffle.Integration.GCSFeaturesTest do
       assert {:ok, name} = GCSTest.WithCustomFilename.store({meta.tmp_path, scope})
 
       url = GCSTest.WithCustomFilename.url({name, scope})
-      assert url == "#{bucket_url()}/uploads/1_#{meta.unique_basename}.png"
+      assert url == "#{bucket_url()}/#{storage_dir()}/1_#{meta.unique_basename}.png"
 
       assert_public(GCSTest.WithCustomFilename, {name, scope})
       delete_and_assert_gone(GCSTest.WithCustomFilename, {name, scope})
@@ -99,14 +99,14 @@ defmodule Waffle.Integration.GCSFeaturesTest do
       assert name == meta.unique_basename <> ".png"
 
       assert mod.url({name, scope}, :original) ==
-               "#{bucket_url()}/uploads/1_original_#{name}"
+               "#{bucket_url()}/#{storage_dir()}/1_original_#{name}"
 
       assert mod.url({name, scope}, :thumb) ==
-               "#{bucket_url()}/uploads/1_thumb_#{name}"
+               "#{bucket_url()}/#{storage_dir()}/1_thumb_#{name}"
 
       # Default version (no arg) resolves to :original
       assert mod.url({name, scope}) ==
-               "#{bucket_url()}/uploads/1_original_#{name}"
+               "#{bucket_url()}/#{storage_dir()}/1_original_#{name}"
 
       # Both versions are actually accessible, and (no transform) keep the .png extension
       assert_public_with_extension(mod, {name, scope}, :original, ".png")
@@ -125,7 +125,7 @@ defmodule Waffle.Integration.GCSFeaturesTest do
       assert {:ok, name} = GCSTest.WithScopedDir.store({meta.tmp_path, scope})
 
       url = GCSTest.WithScopedDir.url({name, scope})
-      assert url == "#{bucket_url()}/uploads/scoped/42/#{name}"
+      assert url == "#{bucket_url()}/#{storage_dir()}/scoped/42/#{name}"
 
       assert_public(GCSTest.WithScopedDir, {name, scope})
       assert_acls_public_reader(GCSTest.WithScopedDir, "scoped/42/#{name}")
@@ -159,20 +159,20 @@ defmodule Waffle.Integration.GCSFeaturesTest do
   describe "URL generation" do
     test "default URL includes bucket and storage directory" do
       url = GCSTest.PublicUpload.url("image.png")
-      assert url == "#{bucket_url()}/uploads/image.png"
+      assert url == "#{bucket_url()}/#{storage_dir()}/image.png"
     end
 
     @tag skip: "GCS URL builder reads asset_host from app config, not definition.asset_host/0 — unlike S3/Local adapters"
     @tag upstream_mismatch: "UrlV2 should call definition.asset_host/0 like S3/Local adapters do"
     test "definition-level asset_host replaces the default endpoint" do
       url = GCSTest.WithAssetHost.url("image.png")
-      assert url == "https://cdn.example.com/uploads/image.png"
+      assert url == "https://cdn.example.com/#{storage_dir()}/image.png"
     end
 
     test "app-level asset_host overrides the default endpoint" do
       with_env(:waffle, :asset_host, "app-cdn.example.com", fn ->
         url = GCSTest.PublicUpload.url("image.png")
-        assert url == "https://app-cdn.example.com/uploads/image.png"
+        assert url == "https://app-cdn.example.com/#{storage_dir()}/image.png"
       end)
     end
 
@@ -183,7 +183,7 @@ defmodule Waffle.Integration.GCSFeaturesTest do
       with_env(:waffle, :asset_host, {:system, "WAFFLE_ASSET_HOST"}, fn ->
         System.put_env("WAFFLE_ASSET_HOST", custom_asset_host)
 
-        assert "#{custom_asset_host}/uploads/image.png" ==
+        assert "#{custom_asset_host}/#{storage_dir()}/image.png" ==
                  GCSTest.PublicUpload.url(@img)
       end)
     end
@@ -191,19 +191,19 @@ defmodule Waffle.Integration.GCSFeaturesTest do
     @tag skip: "TODO - determine if this is relevant to GCS"
     test "asset_host: false reverts to default GCS endpoint" do
       with_env(:waffle, :asset_host, false, fn ->
-        assert "#{bucket_url()}/uploads/image.png" == GCSTest.PublicUpload.url(@img)
+        assert "#{bucket_url()}/#{storage_dir()}/image.png" == GCSTest.PublicUpload.url(@img)
       end)
     end
 
     test "URL-encodes filenames with spaces" do
       url = GCSTest.PublicUpload.url(@img_with_space)
-      assert url == "#{bucket_url()}/uploads/image%20two.png"
+      assert url == "#{bucket_url()}/#{storage_dir()}/image%20two.png"
     end
 
     @tag skip: "TODO - determine if this is relevant to GCS"
     test "URL-encodes filenames with plus signs" do
       url = GCSTest.PublicUpload.url(@img_with_plus)
-      assert url == "#{bucket_url()}/uploads/image%2Bthree.png"
+      assert url == "#{bucket_url()}/#{storage_dir()}/image%2Bthree.png"
     end
 
     test "signed URLs include signature query parameters" do
@@ -219,7 +219,7 @@ defmodule Waffle.Integration.GCSFeaturesTest do
     @tag timeout: 15_000
     test "definition can specify its own bucket", meta do
       # URL is computed from the definition's bucket before anything is stored.
-      expected_url = "#{bucket_url()}/uploads/#{meta.unique_basename}.png"
+      expected_url = "#{bucket_url()}/#{storage_dir()}/#{meta.unique_basename}.png"
       assert GCSTest.WithBucket.url(meta.tmp_path) == expected_url
 
       assert {:ok, name} = GCSTest.WithBucket.store(meta.tmp_path)
@@ -250,7 +250,7 @@ defmodule Waffle.Integration.GCSFeaturesTest do
       assert {:ok, name} = mod.store({@img, scope})
 
       assert mod.url({name, scope}) ==
-               "#{bucket_url(bucket)}/uploads/image.png"
+               "#{bucket_url(bucket)}/#{storage_dir()}/image.png"
 
       assert_public(mod, {name, scope})
       delete_and_assert_gone(mod, {name, scope})

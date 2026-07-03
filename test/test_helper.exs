@@ -46,16 +46,30 @@ end
 
 ExUnit.start()
 
+# Per-run object isolation: everything the suite uploads lives under
+# `uploads/<run id>` (see GCSTest.Run), so concurrent runs against a shared
+# bucket can't interfere, and cleanup only ever deletes this run's prefix.
+# CI should set WAFFLE_TEST_RUN_ID to something job-unique; local runs get a
+# random id. Crashed runs leave their prefix behind — give test buckets a
+# short lifecycle TTL to sweep those.
+System.put_env(
+  "WAFFLE_TEST_RUN_ID",
+  System.get_env("WAFFLE_TEST_RUN_ID") ||
+    (4 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower))
+)
+
 # The `after_suite/1` function was added in Elixir version 1.8.0
 unless Version.compare(System.version(), "1.8.0") == :lt do
   ExUnit.after_suite(&Cleanup.execute/1)
 end
 
-credentials =
-  "GCP_CREDENTIALS"
-  |> System.fetch_env!()
-  |> Jason.decode!()
+# Goth (and therefore any credential requirement) only starts when
+# GCP_CREDENTIALS is present: offline runs (`mix test.unit`) need no creds and
+# no network. Integration tests fail without it — by design.
+case System.get_env("GCP_CREDENTIALS") do
+  empty when empty in [nil, ""] ->
+    :ok
 
-source = {:service_account, credentials}
-
-Goth.start_link(name: Waffle.Goth, source: source)
+  json ->
+    Goth.start_link(name: Waffle.Goth, source: {:service_account, Jason.decode!(json)})
+end

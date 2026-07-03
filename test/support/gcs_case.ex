@@ -61,6 +61,12 @@ defmodule Waffle.GCSCase do
   def bucket_url(bucket \\ env_bucket()), do: "https://storage.googleapis.com/#{bucket}"
 
   @doc """
+  The per-run storage directory all test definitions upload under
+  (see `GCSTest.Run`). Use it in URL assertions instead of a literal prefix.
+  """
+  def storage_dir, do: GCSTest.Run.storage_dir()
+
+  @doc """
   Temporarily set `Application` env for the duration of `fun`, restoring the
   previous value (or deleting the key if it was unset) afterwards.
   """
@@ -138,7 +144,7 @@ defmodule Waffle.GCSCase do
         GoogleApi.Storage.V1.Api.ObjectAccessControls.storage_object_access_controls_list(
           CloudStorage.conn(),
           CloudStorage.bucket(definition),
-          "uploads/#{args}"
+          "#{GCSTest.Run.storage_dir()}/#{args}"
         )
 
       assert [

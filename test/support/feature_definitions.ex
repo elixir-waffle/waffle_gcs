@@ -1,21 +1,23 @@
 # Focused, single-purpose Waffle definitions for integration tests.
 # Each module tests exactly one feature — no multi-behavior overloading.
+# All of them store under the per-run prefix (GCSTest.Run.storage_dir/0) so
+# concurrent runs sharing a bucket stay isolated and cleanup stays scoped.
 
 defmodule GCSTest.PublicUpload do
   use Waffle.Definition
   @acl [%{entity: "allUsers", role: "READER"}]
-  def storage_dir(_, _), do: "uploads"
+  def storage_dir(_, _), do: GCSTest.Run.storage_dir()
 end
 
 defmodule GCSTest.PrivateUpload do
   use Waffle.Definition
-  def storage_dir(_, _), do: "uploads"
+  def storage_dir(_, _), do: GCSTest.Run.storage_dir()
 end
 
 defmodule GCSTest.WithContentType do
   use Waffle.Definition
   @acl [%{entity: "allUsers", role: "READER"}]
-  def storage_dir(_, _), do: "uploads"
+  def storage_dir(_, _), do: GCSTest.Run.storage_dir()
   def gcs_object_headers(:original, _), do: %{contentType: "image/gif"}
   def gcs_object_headers(_, _), do: []
 end
@@ -23,7 +25,7 @@ end
 defmodule GCSTest.WithContentDisposition do
   use Waffle.Definition
   @acl [%{entity: "allUsers", role: "READER"}]
-  def storage_dir(_, _), do: "uploads"
+  def storage_dir(_, _), do: GCSTest.Run.storage_dir()
 
   def gcs_object_headers(:original, _),
     do: %{contentDisposition: "attachment; filename=\"abc.png\""}
@@ -34,7 +36,7 @@ end
 defmodule GCSTest.WithCustomFilename do
   use Waffle.Definition
   @acl [%{entity: "allUsers", role: "READER"}]
-  def storage_dir(_, _), do: "uploads"
+  def storage_dir(_, _), do: GCSTest.Run.storage_dir()
 
   def filename(_version, {file, scope}) do
     file_name = Path.basename(file.file_name, Path.extname(file.file_name))
@@ -46,7 +48,7 @@ defmodule GCSTest.WithVersions do
   use Waffle.Definition
   @acl [%{entity: "allUsers", role: "READER"}]
   @versions [:original, :thumb]
-  def storage_dir(_, _), do: "uploads"
+  def storage_dir(_, _), do: GCSTest.Run.storage_dir()
 
   def transform(:thumb, _) do
     {"convert", "-strip -thumbnail 100x100^ -gravity center -extent 100x100 -format jpg", :jpg}
@@ -57,31 +59,31 @@ defmodule GCSTest.WithSkippedVersion do
   use Waffle.Definition
   @acl [%{entity: "allUsers", role: "READER"}]
   @versions [:skipped]
-  def storage_dir(_, _), do: "uploads"
+  def storage_dir(_, _), do: GCSTest.Run.storage_dir()
   def transform(:skipped, _), do: :skip
 end
 
 defmodule GCSTest.WithScopedDir do
   use Waffle.Definition
   @acl [%{entity: "allUsers", role: "READER"}]
-  def storage_dir(_, {_, scope}), do: "uploads/scoped/#{scope.id}"
+  def storage_dir(_, {_, scope}), do: "#{GCSTest.Run.storage_dir()}/scoped/#{scope.id}"
 end
 
 defmodule GCSTest.WithBucket do
   use Waffle.Definition
-  def storage_dir(_, _), do: "uploads"
+  def storage_dir(_, _), do: GCSTest.Run.storage_dir()
   def bucket, do: System.fetch_env!("WAFFLE_BUCKET")
 end
 
 defmodule GCSTest.WithAssetHost do
   use Waffle.Definition
-  def storage_dir(_, _), do: "uploads"
+  def storage_dir(_, _), do: GCSTest.Run.storage_dir()
   def asset_host, do: "cdn.example.com"
 end
 
 defmodule GCSTest.InvalidBucket do
   use Waffle.Definition
-  def storage_dir(_, _), do: "uploads"
+  def storage_dir(_, _), do: GCSTest.Run.storage_dir()
   def bucket, do: "invalid"
 end
 
@@ -89,7 +91,7 @@ defmodule GCSTest.WithMultiVersionFilename do
   use Waffle.Definition
   @acl [%{entity: "allUsers", role: "READER"}]
   @versions [:original, :thumb]
-  def storage_dir(_, _), do: "uploads"
+  def storage_dir(_, _), do: GCSTest.Run.storage_dir()
 
   def filename(version, {file, scope}) do
     file_name = Path.basename(file.file_name, Path.extname(file.file_name))
@@ -100,7 +102,7 @@ end
 defmodule GCSTest.WithBucketInScope do
   use Waffle.Definition
   @acl [%{entity: "allUsers", role: "READER"}]
-  def storage_dir(_, _), do: "uploads"
+  def storage_dir(_, _), do: GCSTest.Run.storage_dir()
   def bucket({_, scope}), do: scope[:bucket] || bucket()
   def bucket, do: System.fetch_env!("WAFFLE_BUCKET")
 end
@@ -114,7 +116,7 @@ defmodule GCSTest.FilenameProbe do
   use Waffle.Definition
   @acl [%{entity: "allUsers", role: "READER"}]
   @async false
-  def storage_dir(_, _), do: "uploads"
+  def storage_dir(_, _), do: GCSTest.Run.storage_dir()
 
   def filename(version, {file, scope}) do
     send(self(), {:filename_resolved, version})

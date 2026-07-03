@@ -161,5 +161,9 @@ mix test --include double_filename_regression     # the issue #25 regression
 mix test --include bucket_with_file_and_scope     # a 0.3-gated behavior
 ```
 
-Test objects are removed from the bucket after the suite runs. See the tag
-taxonomy at the top of `test/test_helper.exs` for the full list of tags.
+Each run uploads everything under its own `uploads/<run id>` prefix (set
+`WAFFLE_TEST_RUN_ID` in CI to something job-unique; local runs generate one),
+so concurrent runs can safely share a bucket. After the suite, only that run's
+prefix is deleted — runs that crash before cleanup leave their prefix behind,
+so give test buckets a short object-lifecycle TTL. See the tag taxonomy at the
+top of `test/test_helper.exs` for the full list of tags.

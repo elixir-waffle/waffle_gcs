@@ -25,7 +25,7 @@ defmodule Waffle.Integration.DoubleFilenameRegressionTest do
     assert name == meta.unique_basename <> ".png"
 
     assert GCSTest.FilenameProbe.url({name, scope}) ==
-             "#{bucket_url()}/uploads/1_original_#{name}"
+             "#{bucket_url()}/#{storage_dir()}/1_original_#{name}"
 
     assert_public(GCSTest.FilenameProbe, {name, scope})
     delete_and_assert_gone(GCSTest.FilenameProbe, {name, scope})

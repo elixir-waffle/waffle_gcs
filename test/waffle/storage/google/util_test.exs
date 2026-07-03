@@ -17,7 +17,12 @@ defmodule Waffle.Storage.Google.UtilTest do
       prev = System.get_env(key)
       System.put_env(key, new)
       value = Util.var({:system, key})
-      System.put_env(key, prev)
+
+      case prev do
+        nil -> System.delete_env(key)
+        _ -> System.put_env(key, prev)
+      end
+
       assert new == value
     end
 
