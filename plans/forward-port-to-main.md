@@ -5,6 +5,12 @@ v0.2.x tag). This file lives under `plans/`, which is **not** in the `mix.exs`
 `files:` whitelist, so it is excluded from the published hex package. It is safe
 to commit to git.
 
+> **Update 2026-07-03:** this is now step 0 of a larger plan set — see
+> [plans/README.md](README.md) for the index and
+> [plans/0.3-release.md](0.3-release.md) for everything else gating 0.3
+> (GitHub milestone **v0.3**, issues #27–#37). The §4 gating question below is
+> decided: **option (a)**, tracked as issue #33.
+
 ## Why this branch exists
 
 `main` already carries PR #1 ("Fix resolve_file_name called twice"), which fixed
@@ -179,6 +185,10 @@ fails.** Before cutting 0.3 you must either:
 Option (a) is the intended 0.3 work; (b)/(c) are stopgaps. Decide deliberately —
 don't let a green 0.2 suite lull you into a red 0.3 suite on the first `mix test`.
 
+**Decided: option (a)** — implement bucket-from-scope, tracked in issue #33.
+`WAFFLE_BUCKET2` has been added to the GHA repository secrets, so CI can run
+the two-bucket test once the workflow passes it through (issue #36).
+
 Related: several `@tag skip: "..."` tests encode "correct but not-yet-supported"
 behavior (definition-level `asset_host`, `{:system}`/`false` asset_host,
 plus-sign URL escaping). `skip:` **cannot** be re-enabled from the CLI. When you
@@ -220,6 +230,8 @@ Then:
 - [ ] Decide the token-fetcher story deliberately; keep it separate (§2).
 - [ ] Cherry-pick `6756769`, `394dbad`, `8cc2eb7`, `d9f3344` in order (§3).
 - [ ] Merge (don't clobber) main's `mix.exs`; keep main's `import Config` (§3).
-- [ ] Resolve the 0.3 version-gating flip for `:bucket_with_file_and_scope` (§4).
+- [ ] Resolve the 0.3 version-gating flip for `:bucket_with_file_and_scope` (§4)
+      — decided: implement bucket-from-scope, issue #33.
 - [ ] Convert future-behavior `skip:` tags to exclude tags for 0.3 (§4).
 - [ ] Run the full verification (§5).
+- [ ] Continue with [0.3-release.md](0.3-release.md) (milestone v0.3).
