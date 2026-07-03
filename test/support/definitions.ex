@@ -26,3 +26,15 @@ defmodule DummyDefinitionInvalidBucket do
 
   def bucket(), do: "invalid"
 end
+
+defmodule DummyDefinitionBrokenObjectHeaders do
+  use DummyDefBase
+
+  def gcs_object_headers(_version, _meta), do: missing_header_function()
+end
+
+defmodule DummyDefinitionBrokenOptionalParams do
+  use DummyDefBase
+
+  def gcs_optional_params(_version, _meta), do: missing_optional_params_function()
+end

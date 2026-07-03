@@ -154,21 +154,23 @@ defmodule Waffle.Storage.Google.CloudStorage do
   end
 
   defp get_gcs_options(definition, version, meta) do
-    try do
-      apply(definition, :gcs_object_headers, [version, meta])
-    rescue
-      UndefinedFunctionError ->
-        []
+    if optional_callback_exported?(definition, :gcs_object_headers) do
+      definition.gcs_object_headers(version, meta)
+    else
+      []
     end
   end
 
   defp get_gcs_optional_params(definition, version, meta) do
-    try do
-      apply(definition, :gcs_optional_params, [version, meta])
-    rescue
-      UndefinedFunctionError ->
-        []
+    if optional_callback_exported?(definition, :gcs_optional_params) do
+      definition.gcs_optional_params(version, meta)
+    else
+      []
     end
+  end
+
+  defp optional_callback_exported?(definition, callback_name) do
+    Code.ensure_loaded?(definition) and function_exported?(definition, callback_name, 2)
   end
 
   defp ensure_keyword_list(list) when is_list(list), do: list
