@@ -96,6 +96,24 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
       assert {:error, _} = CloudStorage.put(DummyDefinitionInvalidBucket, ver, meta)
     end
 
+    test "put/3 propagates UndefinedFunctionError from gcs_object_headers/2", %{
+      version: ver,
+      meta: meta
+    } do
+      assert_raise UndefinedFunctionError, fn ->
+        CloudStorage.put(DummyDefinitionBrokenObjectHeaders, ver, meta)
+      end
+    end
+
+    test "put/3 propagates UndefinedFunctionError from gcs_optional_params/2", %{
+      version: ver,
+      meta: meta
+    } do
+      assert_raise UndefinedFunctionError, fn ->
+        CloudStorage.put(DummyDefinitionBrokenOptionalParams, ver, meta)
+      end
+    end
+
     test "delete/3 successfully deletes existing object", %{
       definition: def,
       version: ver,
