@@ -55,7 +55,7 @@ ExUnit.start()
 System.put_env(
   "WAFFLE_TEST_RUN_ID",
   System.get_env("WAFFLE_TEST_RUN_ID") ||
-    (4 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower))
+    4 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower)
 )
 
 # The `after_suite/1` function was added in Elixir version 1.8.0

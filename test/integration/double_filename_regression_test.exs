@@ -9,7 +9,7 @@ defmodule Waffle.Integration.DoubleFilenameRegressionTest do
   # call, so a buggy adapter shows up as a second message (and a doubled name).
   use Waffle.GCSCase
 
-  @tag double_filename_regression: "issue #25 - filename/2 must be resolved exactly once per version during put"
+  @tag double_filename_regression: "issue #25: resolve filename/2 once per version"
   @tag timeout: 15_000
   test "filename/2 is resolved exactly once and the stored name is not doubled", meta do
     scope = %{id: 1}

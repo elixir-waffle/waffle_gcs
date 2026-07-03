@@ -162,7 +162,8 @@ defmodule Waffle.Integration.GCSFeaturesTest do
       assert url == "#{bucket_url()}/#{storage_dir()}/image.png"
     end
 
-    @tag skip: "GCS URL builder reads asset_host from app config, not definition.asset_host/0 — unlike S3/Local adapters"
+    @tag skip:
+           "GCS URL builder reads asset_host from app config, not definition.asset_host/0 — unlike S3/Local adapters"
     @tag upstream_mismatch: "UrlV2 should call definition.asset_host/0 like S3/Local adapters do"
     test "definition-level asset_host replaces the default endpoint" do
       url = GCSTest.WithAssetHost.url("image.png")
