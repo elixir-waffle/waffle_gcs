@@ -15,24 +15,30 @@
 #     0.2.x. Excluded below when the lib version is < 0.3.0. Run it explicitly
 #     with `mix test --include bucket_with_file_and_scope`.
 #
+# :pending_asset_host, :pending_url_encoding, :pending_content_type_inference
+#     Correct-but-not-yet-implemented behavior, excluded unconditionally below.
+#     Each test asserts the *intended* behavior and fails today — run one with
+#     `mix test --include <tag>` to watch the corresponding fix progress.
+#
 # double_filename_regression: "..."
 #     The guard for issue #25 (filename/2 must be resolved exactly once per
 #     version during put). Run it explicitly with
 #     `mix test --include double_filename_regression`.
 #
-# skip: "..."
-#     Truly inert tests: deprecated APIs, or S3-specific behavior that doesn't
-#     apply to GCS. NOTE: `skip` cannot be re-enabled from the CLI — when 0.3
-#     work begins, future-behavior `skip`s should become exclude tags (like
-#     :bucket_with_file_and_scope) so they can be toggled with `--include`.
-#
 # upstream_mismatch: "..."
 #     Informational marker for divergence from the upstream Waffle S3/Local
-#     adapters (a parity bug to reconcile later). Always paired with a `skip` or
-#     an exclude tag so the suite stays green.
+#     adapters (a parity bug to reconcile later). Paired with an exclude tag
+#     when the test would fail today, so the suite stays green.
 # ─────────────────────────────────────────────────────────────────────────────
 
 lib_version = Mix.Project.config() |> Keyword.fetch!(:version)
+
+# Intended behavior that isn't implemented yet; see the tag taxonomy above.
+pending_behavior_excludes = [
+  :pending_asset_host,
+  :pending_url_encoding,
+  :pending_content_type_inference
+]
 
 # Tags for tests that are to be ignored for 0.2.x versions for one reason or another.
 # See the individual tag for more information.
@@ -40,9 +46,15 @@ excludes_for_0_2_x = [
   :bucket_with_file_and_scope
 ]
 
-if Version.compare(lib_version, "0.3.0") == :lt do
-  ExUnit.configure(exclude: excludes_for_0_2_x)
-end
+version_gated_excludes =
+  if Version.compare(lib_version, "0.3.0") == :lt do
+    excludes_for_0_2_x
+  else
+    []
+  end
+
+# Single configure call: a second `exclude:` would replace, not merge.
+ExUnit.configure(exclude: pending_behavior_excludes ++ version_gated_excludes)
 
 ExUnit.start()
 
