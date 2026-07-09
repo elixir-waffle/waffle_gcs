@@ -126,6 +126,10 @@ end
 
 The list of all the supported attributes can be found here: https://hexdocs.pm/google_api_storage/GoogleApi.Storage.V1.Model.Object.html.
 
+When no `contentType` is given, it is inferred from the file's extension
+(e.g. `.png` → `image/png`); files with unknown extensions fall back to
+`application/octet-stream`.
+
 ## GCS optional params
 
 You can specify optional params by defining `gcs_optional_params/2` in your definition, which returns keywords list, E.g:

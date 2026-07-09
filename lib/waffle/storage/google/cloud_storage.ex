@@ -41,6 +41,9 @@ defmodule Waffle.Storage.Google.CloudStorage do
       |> get_gcs_options(version, meta)
       |> ensure_keyword_list()
       |> Keyword.put(:acl, acl)
+      # GCS stores objects without a content type as application/octet-stream,
+      # so infer one from the filename unless the definition's headers set it.
+      |> Keyword.put_new(:contentType, MIME.from_path(file.file_name))
       |> Enum.into(%{})
 
     gcs_optional_params =
