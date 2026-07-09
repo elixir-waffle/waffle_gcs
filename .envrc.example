@@ -1,0 +1,21 @@
+# direnv template for running the integration tests against real GCS.
+# Copy to .envrc (gitignored), fill in your values, run `direnv allow`.
+#
+# Every export respects a value already present in the environment, so you
+# can override any single var per-invocation:
+#
+#   WAFFLE_BUCKET=not-a-bucket direnv exec . mix test   # bad-value testing
+#   env -u GCP_CREDENTIALS mix test.unit                # drop one var
+#   WAFFLE_NO_CREDS=1 direnv exec . mix test.unit       # load nothing at all
+#
+# (In an interactive direnv-hooked shell the vars are already exported, so
+# plain `WAFFLE_BUCKET=bad mix test` works too.)
+
+if [ -z "${WAFFLE_NO_CREDS:-}" ]; then
+  export WAFFLE_BUCKET="${WAFFLE_BUCKET:-your-test-bucket}"
+  export WAFFLE_BUCKET2="${WAFFLE_BUCKET2:-your-second-test-bucket}"
+
+  if [ -z "${GCP_CREDENTIALS:-}" ] && [ -f "$HOME/path/to/service-account.json" ]; then
+    export GCP_CREDENTIALS="$(cat "$HOME/path/to/service-account.json")"
+  fi
+fi
