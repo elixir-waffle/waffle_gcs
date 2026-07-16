@@ -67,6 +67,18 @@ defmodule Waffle.GCSCase do
   def storage_dir, do: GCSTest.Run.storage_dir()
 
   @doc """
+  Copies the fixture image into the test's tmp_dir under `filename` and
+  returns the path — for tests exercising hostile filenames (spaces,
+  unicode, reserved URL characters).
+  """
+  def stage_fixture(meta, filename) do
+    path = Path.join(meta.tmp_dir, filename)
+    File.cp!(@img, path)
+    on_exit(fn -> File.rm(path) end)
+    path
+  end
+
+  @doc """
   Temporarily set `Application` env for the duration of `fun`, restoring the
   previous value (or deleting the key if it was unset) afterwards.
   """
@@ -136,15 +148,19 @@ defmodule Waffle.GCSCase do
     end
   end
 
-  defmacro assert_acls_public_reader(definition, args) do
-    quote bind_quoted: [definition: definition, args: args] do
+  # `rel_path` is the object's path relative to the run's storage dir, stated
+  # explicitly by the caller. Deliberately NOT derived via `path_for/3`: the
+  # expected location must stay independent of the path-building code under
+  # test, or consistent bugs (like #25's double resolution) become invisible.
+  defmacro assert_acls_public_reader(definition, rel_path) do
+    quote bind_quoted: [definition: definition, rel_path: rel_path] do
       alias Waffle.Storage.Google.CloudStorage
 
       {:ok, %GoogleApi.Storage.V1.Model.ObjectAccessControls{} = acls} =
         GoogleApi.Storage.V1.Api.ObjectAccessControls.storage_object_access_controls_list(
           CloudStorage.conn(),
           CloudStorage.bucket(definition),
-          "#{GCSTest.Run.storage_dir()}/#{args}"
+          "#{GCSTest.Run.storage_dir()}/#{rel_path}"
         )
 
       assert [
@@ -159,7 +175,23 @@ defmodule Waffle.GCSCase do
   defmacro delete_and_assert_gone(definition, args) do
     quote bind_quoted: [definition: definition, args: args] do
       :ok = definition.delete(args)
-      signed_url = definition.url(args, signed: true)
+      assert_version_gone(definition, args, :original)
+    end
+  end
+
+  @doc """
+  Asserts a single already-deleted version is inaccessible. Use after a
+  `delete/1` for each version a definition declares — `definition.delete/1`
+  deletes every version, but a URL probe only checks one at a time.
+  """
+  defmacro assert_version_gone(definition, args, version) do
+    quote bind_quoted: [definition: definition, args: args, version: version] do
+      # GCS edge-caches public-object responses. A signed URL identical to one
+      # fetched moments before deletion (same Expires second => same signature)
+      # can serve a cached 200 — a unique expiry per probe forces a fresh
+      # cache key.
+      expires_in = 3000 + rem(System.unique_integer([:positive]), 600)
+      signed_url = definition.url(args, version, signed: true, expires_in: expires_in)
       {:ok, {{_, code, _}, _, _}} = :httpc.request(to_charlist(signed_url))
 
       # If buckets aren't configured to be public at the bucket level, deleted

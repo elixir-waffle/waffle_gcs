@@ -150,6 +150,9 @@ The integration tests upload to real Google Cloud Storage and need a bucket and
 service-account credentials in the environment (a second bucket is used by the
 bucket-from-scope test):
 
+direnv users: copy `.envrc.example` to `.envrc` (gitignored), fill in your
+values, and `direnv allow` — the exports below then happen automatically.
+
 ```
 export WAFFLE_BUCKET=your-test-bucket
 export WAFFLE_BUCKET2=your-second-test-bucket

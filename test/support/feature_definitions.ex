@@ -22,6 +22,25 @@ defmodule GCSTest.WithContentType do
   def gcs_object_headers(_, _), do: []
 end
 
+defmodule GCSTest.WithKeywordHeaders do
+  use Waffle.Definition
+  @acl [%{entity: "allUsers", role: "READER"}]
+  def storage_dir(_, _), do: GCSTest.Run.storage_dir()
+
+  # Same as GCSTest.WithContentType but returning a keyword list — both
+  # shapes are documented as supported for gcs_object_headers/2.
+  def gcs_object_headers(:original, _), do: [contentType: "image/gif"]
+  def gcs_object_headers(_, _), do: []
+end
+
+defmodule GCSTest.WithOptionalParams do
+  use Waffle.Definition
+  # Deliberately no @acl: public access must come solely from the
+  # predefinedAcl optional param reaching the API.
+  def storage_dir(_, _), do: GCSTest.Run.storage_dir()
+  def gcs_optional_params(_, _), do: [predefinedAcl: "publicRead"]
+end
+
 defmodule GCSTest.WithContentDisposition do
   use Waffle.Definition
   @acl [%{entity: "allUsers", role: "READER"}]

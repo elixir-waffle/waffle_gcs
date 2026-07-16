@@ -37,6 +37,26 @@ defmodule Waffle.Integration.GCSFeaturesTest do
   # ── GCS object headers ────────────────────────────────────────────────
 
   describe "GCS object headers" do
+    # Today every upload without an explicit contentType header is stored as
+    # application/octet-stream — browsers download images instead of showing
+    # them. The S3 adapter infers MIME type from the filename; this asserts
+    # that intended behavior.
+    @tag :pending_content_type_inference
+    @tag upstream_mismatch: "S3 adapter infers MIME from the filename; GCS stores octet-stream"
+    @tag timeout: 15_000
+    test "infers content-type from the file extension when no header is set", meta do
+      assert {:ok, name} = GCSTest.PublicUpload.store(meta.tmp_path)
+      assert_header(GCSTest.PublicUpload, name, "content-type", "image/png")
+      delete_and_assert_gone(GCSTest.PublicUpload, name)
+    end
+
+    @tag timeout: 15_000
+    test "sets custom content-type from a keyword list of headers", meta do
+      assert {:ok, name} = GCSTest.WithKeywordHeaders.store(meta.tmp_path)
+      assert_header(GCSTest.WithKeywordHeaders, name, "content-type", "image/gif")
+      delete_and_assert_gone(GCSTest.WithKeywordHeaders, name)
+    end
+
     @tag timeout: 15_000
     test "sets custom content-type on the uploaded object", meta do
       assert {:ok, name} = GCSTest.WithContentType.store(meta.tmp_path)
@@ -60,6 +80,20 @@ defmodule Waffle.Integration.GCSFeaturesTest do
       )
 
       delete_and_assert_gone(GCSTest.WithContentDisposition, name)
+    end
+  end
+
+  # ── GCS optional params ───────────────────────────────────────────────
+
+  describe "GCS optional params" do
+    @tag timeout: 15_000
+    test "gcs_optional_params/2 values reach the API (predefinedAcl)", meta do
+      assert {:ok, name} = GCSTest.WithOptionalParams.store(meta.tmp_path)
+
+      # The definition sets no ACL of its own, so public readability can only
+      # have come from the predefinedAcl query param.
+      assert_public(GCSTest.WithOptionalParams, name)
+      delete_and_assert_gone(GCSTest.WithOptionalParams, name)
     end
   end
 
@@ -146,7 +180,10 @@ defmodule Waffle.Integration.GCSFeaturesTest do
       # Thumbnail is accessible and was converted to .jpg
       assert_public_with_extension(GCSTest.WithVersions, name, :thumb, ".jpg")
 
-      delete_and_assert_gone(GCSTest.WithVersions, name)
+      # delete/1 removes every version, not just the default one
+      :ok = GCSTest.WithVersions.delete(name)
+      assert_version_gone(GCSTest.WithVersions, name, :original)
+      assert_version_gone(GCSTest.WithVersions, name, :thumb)
     end
 
     test "returns nil URL for a skipped version" do
@@ -162,8 +199,7 @@ defmodule Waffle.Integration.GCSFeaturesTest do
       assert url == "#{bucket_url()}/#{storage_dir()}/image.png"
     end
 
-    @tag skip:
-           "GCS URL builder reads asset_host from app config, not definition.asset_host/0 — unlike S3/Local adapters"
+    @tag :pending_asset_host
     @tag upstream_mismatch: "UrlV2 should call definition.asset_host/0 like S3/Local adapters do"
     test "definition-level asset_host replaces the default endpoint" do
       url = GCSTest.WithAssetHost.url("image.png")
@@ -177,7 +213,8 @@ defmodule Waffle.Integration.GCSFeaturesTest do
       end)
     end
 
-    @tag skip: "TODO - determine if this is relevant to GCS"
+    @tag :pending_asset_host
+    @tag upstream_mismatch: "S3/Local support {:system, var} asset_host values (with scheme)"
     test "app-level asset_host via {:system, env_var} tuple" do
       custom_asset_host = "https://some.cloudfront.com"
 
@@ -189,7 +226,8 @@ defmodule Waffle.Integration.GCSFeaturesTest do
       end)
     end
 
-    @tag skip: "TODO - determine if this is relevant to GCS"
+    @tag :pending_asset_host
+    @tag upstream_mismatch: "S3/Local treat asset_host: false as 'use the default endpoint'"
     test "asset_host: false reverts to default GCS endpoint" do
       with_env(:waffle, :asset_host, false, fn ->
         assert "#{bucket_url()}/#{storage_dir()}/image.png" == GCSTest.PublicUpload.url(@img)
@@ -201,7 +239,11 @@ defmodule Waffle.Integration.GCSFeaturesTest do
       assert url == "#{bucket_url()}/#{storage_dir()}/image%20two.png"
     end
 
-    @tag skip: "TODO - determine if this is relevant to GCS"
+    # NOTE: an unencoded "+" is legal in a URL *path* segment, so %2B here is
+    # S3-adapter parity, not a GCS requirement — the URL-encoding fix should
+    # decide this deliberately.
+    @tag :pending_url_encoding
+    @tag upstream_mismatch: "S3 adapter percent-encodes '+' in object paths"
     test "URL-encodes filenames with plus signs" do
       url = GCSTest.PublicUpload.url(@img_with_plus)
       assert url == "#{bucket_url()}/#{storage_dir()}/image%2Bthree.png"
@@ -211,6 +253,79 @@ defmodule Waffle.Integration.GCSFeaturesTest do
       url = GCSTest.PublicUpload.url("image.png", signed: true)
       assert url =~ "GoogleAccessId="
       assert url =~ "Signature="
+    end
+
+    # GCS validates a v2 signature against the canonical resource
+    # "/<bucket>/<object>". With an asset_host configured, the URL builder
+    # drops the bucket segment, so the signer signs "/<object>" — a resource
+    # GCS will never agree with. The URL looks fine and returns 403 forever.
+    # Until the fix decides between signing the real GCS resource or refusing
+    # the combination, this test only pins the current output shape so a
+    # refactor can't change it unnoticed.
+    @tag upstream_mismatch:
+           "signs '/<object>' instead of '/<bucket>/<object>' when asset_host is set"
+    test "signed URL with asset_host is well-formed but its signature cannot validate" do
+      with_env(:waffle, :asset_host, "app-cdn.example.com", fn ->
+        url = GCSTest.PublicUpload.url("image.png", signed: true)
+
+        assert url =~ "https://app-cdn.example.com/#{storage_dir()}/image.png"
+        assert url =~ "Signature="
+      end)
+    end
+  end
+
+  # ── Special-character filenames ──────────────────────────────────────
+  #
+  # Each test stages the fixture under a hostile name and round-trips it:
+  # store -> GET via the generated URL -> delete. These pin URL encoding
+  # behavior end-to-end, not just the generated URL string.
+
+  describe "special-character filenames" do
+    @tag timeout: 15_000
+    test "round-trips a filename containing spaces", meta do
+      path = stage_fixture(meta, "#{meta.unique_basename} with space.png")
+
+      assert {:ok, name} = GCSTest.PublicUpload.store(path)
+      assert name == "#{meta.unique_basename} with space.png"
+      assert_public(GCSTest.PublicUpload, name)
+
+      # Signed URLs must survive the percent-encoded path too: the signature
+      # is computed over the encoded resource.
+      signed_url = GCSTest.PublicUpload.url(name, signed: true)
+      {:ok, {{_, code, _}, _, _}} = :httpc.request(to_charlist(signed_url))
+      assert code == 200
+
+      delete_and_assert_gone(GCSTest.PublicUpload, name)
+    end
+
+    @tag timeout: 15_000
+    test "round-trips a filename containing unicode", meta do
+      path = stage_fixture(meta, "#{meta.unique_basename}_ünïcode_日本.png")
+
+      assert {:ok, name} = GCSTest.PublicUpload.store(path)
+      assert_public(GCSTest.PublicUpload, name)
+      delete_and_assert_gone(GCSTest.PublicUpload, name)
+    end
+
+    @tag timeout: 15_000
+    test "round-trips a filename containing a percent sign", meta do
+      path = stage_fixture(meta, "#{meta.unique_basename}_100%.png")
+
+      assert {:ok, name} = GCSTest.PublicUpload.store(path)
+      assert_public(GCSTest.PublicUpload, name)
+      delete_and_assert_gone(GCSTest.PublicUpload, name)
+    end
+
+    @tag :pending_url_encoding
+    @tag upstream_mismatch:
+           "URI.encode/1 leaves # unencoded, so the URL truncates at the fragment"
+    @tag timeout: 15_000
+    test "round-trips a filename containing a hash", meta do
+      path = stage_fixture(meta, "#{meta.unique_basename}_v#2.png")
+
+      assert {:ok, name} = GCSTest.PublicUpload.store(path)
+      assert_public(GCSTest.PublicUpload, name)
+      delete_and_assert_gone(GCSTest.PublicUpload, name)
     end
   end
 

@@ -69,9 +69,17 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
       assert System.fetch_env!("WAFFLE_BUCKET") == CloudStorage.bucket(GCSTest.PublicUpload)
     end
 
+    # These tests deliberately pin the full result shapes — dependency structs
+    # included — because they are the contract consumers pattern-match on
+    # today. Any change to them (including wrapping in library-owned types)
+    # must show up here as an explicit, versioned decision.
+
     @tag timeout: 15_000
-    test "put/3 uploads a file", %{meta: meta} do
-      assert {:ok, _} = CloudStorage.put(GCSTest.PublicUpload, :original, meta)
+    test "put/3 uploads a file and returns the GCS object", %{meta: meta, name: name} do
+      assert {:ok, %GoogleApi.Storage.V1.Model.Object{} = object} =
+               CloudStorage.put(GCSTest.PublicUpload, :original, meta)
+
+      assert object.name == "#{GCSTest.Run.storage_dir()}/#{name}.png"
     end
 
     @tag timeout: 15_000
@@ -79,24 +87,32 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
       meta =
         {%Waffle.File{binary: File.read!(@file_path), file_name: "#{name}.png"}, nil}
 
-      assert {:ok, _} = CloudStorage.put(GCSTest.PublicUpload, :original, meta)
+      assert {:ok, %GoogleApi.Storage.V1.Model.Object{}} =
+               CloudStorage.put(GCSTest.PublicUpload, :original, meta)
     end
 
     @tag timeout: 15_000
     test "put/3 fails for an invalid bucket", %{meta: meta} do
-      assert {:error, _} = CloudStorage.put(GCSTest.InvalidBucket, :original, meta)
+      # 403, not 404: GCS does not disclose bucket existence on insert.
+      assert {:error, %Tesla.Env{status: 403}} =
+               CloudStorage.put(GCSTest.InvalidBucket, :original, meta)
     end
 
     @tag timeout: 15_000
     test "delete/3 removes an existing object", %{meta: meta} do
       assert {:ok, _} = CloudStorage.put(GCSTest.PublicUpload, :original, meta)
-      assert {:ok, _} = CloudStorage.delete(GCSTest.PublicUpload, :original, meta)
+
+      assert {:ok, %Tesla.Env{status: 204}} =
+               CloudStorage.delete(GCSTest.PublicUpload, :original, meta)
     end
 
     @tag timeout: 15_000
     test "delete/3 fails for a non-existent object or invalid bucket", %{meta: meta} do
-      assert {:error, _} = CloudStorage.delete(GCSTest.PublicUpload, :original, meta)
-      assert {:error, _} = CloudStorage.delete(GCSTest.InvalidBucket, :original, meta)
+      assert {:error, %Tesla.Env{status: 404}} =
+               CloudStorage.delete(GCSTest.PublicUpload, :original, meta)
+
+      assert {:error, %Tesla.Env{status: 404}} =
+               CloudStorage.delete(GCSTest.InvalidBucket, :original, meta)
     end
 
     @tag timeout: 15_000
