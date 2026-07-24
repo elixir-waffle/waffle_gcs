@@ -37,12 +37,6 @@ defmodule Waffle.Integration.GCSFeaturesTest do
   # ── GCS object headers ────────────────────────────────────────────────
 
   describe "GCS object headers" do
-    # Today every upload without an explicit contentType header is stored as
-    # application/octet-stream — browsers download images instead of showing
-    # them. The S3 adapter infers MIME type from the filename; this asserts
-    # that intended behavior.
-    @tag :pending_content_type_inference
-    @tag upstream_mismatch: "S3 adapter infers MIME from the filename; GCS stores octet-stream"
     @tag timeout: 15_000
     test "infers content-type from the file extension when no header is set", meta do
       assert {:ok, name} = GCSTest.PublicUpload.store(meta.tmp_path)
@@ -106,6 +100,11 @@ defmodule Waffle.Integration.GCSFeaturesTest do
       filename = meta.unique_basename <> ".png"
       assert {:ok, name} = GCSTest.PublicUpload.store(%{filename: filename, binary: binary})
       assert_public(GCSTest.PublicUpload, name)
+
+      # Content-type inference applies to binary uploads too — there's no file
+      # on disk, only the filename to infer from.
+      assert_header(GCSTest.PublicUpload, name, "content-type", "image/png")
+
       delete_and_assert_gone(GCSTest.PublicUpload, name)
     end
   end

@@ -15,7 +15,7 @@
 #     0.2.x. Excluded below when the lib version is < 0.3.0. Run it explicitly
 #     with `mix test --include bucket_with_file_and_scope`.
 #
-# :pending_asset_host, :pending_url_encoding, :pending_content_type_inference
+# :pending_asset_host, :pending_url_encoding
 #     Correct-but-not-yet-implemented behavior, excluded unconditionally below.
 #     Each test asserts the *intended* behavior and fails today — run one with
 #     `mix test --include <tag>` to watch the corresponding fix progress.
@@ -36,8 +36,7 @@ lib_version = Mix.Project.config() |> Keyword.fetch!(:version)
 # Intended behavior that isn't implemented yet; see the tag taxonomy above.
 pending_behavior_excludes = [
   :pending_asset_host,
-  :pending_url_encoding,
-  :pending_content_type_inference
+  :pending_url_encoding
 ]
 
 # Tags for tests that are to be ignored for 0.2.x versions for one reason or another.

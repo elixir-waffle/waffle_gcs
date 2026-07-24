@@ -53,6 +53,9 @@ defmodule Waffle.Storage.Google.CloudStorage.MixProject do
       {:waffle, "~> 1.1"},
       {:goth, "~> 1.1"},
       {:google_api_storage, "~> 0.34"},
+      # Direct dependency for content-type inference (already transitive via
+      # google_gax); google_gax's "~> 1.0" constraint governs resolution.
+      {:mime, "~> 1.2 or ~> 2.0"},
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
       {:dialyxir, "~> 1.0", only: [:dev], runtime: false}
     ]
