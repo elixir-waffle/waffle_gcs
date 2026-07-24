@@ -6,11 +6,12 @@ defmodule Waffle.Storage.Google.CloudStorage.MixProject do
       app: :waffle_gcs,
       name: "Waffle GCS",
       description: description(),
-      version: "0.2.0",
+      version: "0.3.0",
       elixir: "~> 1.13",
       elixirc_paths: elixirc_paths(Mix.env()),
       aliases: aliases(),
       deps: deps(),
+      docs: docs(),
       package: package(),
       source_url: "https://github.com/elixir-waffle/waffle_gcs",
       homepage_url: "https://github.com/elixir-waffle/waffle_gcs"
@@ -39,9 +40,19 @@ defmodule Waffle.Storage.Google.CloudStorage.MixProject do
 
   defp package do
     [
-      files: ~w(config/config.exs lib LICENSE mix.exs README.md),
+      files: ~w(config/config.exs lib LICENSE mix.exs README.md CHANGELOG.md),
       licenses: ["Apache-2.0"],
-      links: %{"GitHub" => "https://github.com/elixir-waffle/waffle_gcs"}
+      links: %{
+        "GitHub" => "https://github.com/elixir-waffle/waffle_gcs",
+        "CHANGELOG" => "https://github.com/elixir-waffle/waffle_gcs/blob/main/CHANGELOG"
+      }
+    ]
+  end
+
+  defp docs do
+    [
+      main: "readme",
+      extras: ["README.md", "CHANGELOG.md", "UPGRADING.md"]
     ]
   end
 
