@@ -49,6 +49,20 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
     end
   end
 
+  describe "bucket/2" do
+    test "selects the bucket from scope when the definition supports it" do
+      meta = {%Waffle.File{file_name: "image.png"}, %{bucket: "scope-bucket"}}
+
+      assert "scope-bucket" == CloudStorage.bucket(GCSTest.WithBucketInScope, meta)
+    end
+
+    test "ignores the scope for a definition without scope-based bucket selection" do
+      meta = {%Waffle.File{file_name: "image.png"}, %{bucket: "ignored"}}
+
+      assert "invalid" == CloudStorage.bucket(GCSTest.InvalidBucket, meta)
+    end
+  end
+
   # ── Module API against real GCS ──────────────────────────────────────────
 
   describe "CloudStorage module API (real GCS)" do

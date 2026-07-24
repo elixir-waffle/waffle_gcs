@@ -354,7 +354,6 @@ defmodule Waffle.Integration.GCSFeaturesTest do
       end)
     end
 
-    @tag upstream_mismatch: "This is a bug w/ bucket/1 not being implemented. To be resolved"
     @tag :bucket_with_file_and_scope
     @tag timeout: 150_000
     test "bucket/1 selects bucket from scope" do
