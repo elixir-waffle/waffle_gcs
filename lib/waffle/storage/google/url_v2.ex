@@ -61,46 +61,46 @@ defmodule Waffle.Storage.Google.UrlV2 do
     path = CloudStorage.path_for(definition, version, meta)
 
     if signed?(options) do
-      build_signed_url(definition, path, options)
+      build_signed_url(definition, meta, path, options)
     else
-      build_url(definition, path)
+      build_url(definition, meta, path)
     end
   end
 
-  @spec build_url(Types.definition(), String.t()) :: String.t()
-  defp build_url(definition, path) do
+  @spec build_url(Types.definition(), Types.meta(), String.t()) :: String.t()
+  defp build_url(definition, meta, path) do
     %URI{
       host: endpoint(),
-      path: build_path(definition, path),
+      path: build_path(definition, meta, path),
       scheme: "https"
     }
     |> URI.to_string()
   end
 
-  @spec build_signed_url(Types.definition(), String.t(), Keyword.t()) :: String.t()
-  defp build_signed_url(definition, path, options) do
+  @spec build_signed_url(Types.definition(), Types.meta(), String.t(), Keyword.t()) :: String.t()
+  defp build_signed_url(definition, meta, path, options) do
     {:ok, client_id} = Goth.Config.get(:client_email)
 
     expiration = System.os_time(:second) + expiry(options)
 
     signature =
       definition
-      |> build_path(path)
+      |> build_path(meta, path)
       |> canonical_request(expiration)
       |> sign_request()
 
-    base_url = build_url(definition, path)
+    base_url = build_url(definition, meta, path)
 
     "#{base_url}?GoogleAccessId=#{client_id}&Expires=#{expiration}&Signature=#{signature}"
   end
 
-  @spec build_path(Types.definition(), String.t()) :: String.t()
-  defp build_path(definition, path) do
+  @spec build_path(Types.definition(), Types.meta(), String.t()) :: String.t()
+  defp build_path(definition, meta, path) do
     path =
       if endpoint() != @endpoint do
         path
       else
-        bucket_and_path(definition, path)
+        bucket_and_path(definition, meta, path)
       end
 
     path
@@ -108,10 +108,10 @@ defmodule Waffle.Storage.Google.UrlV2 do
     |> URI.encode()
   end
 
-  @spec bucket_and_path(Types.definition(), String.t()) :: String.t()
-  defp bucket_and_path(definition, path) do
+  @spec bucket_and_path(Types.definition(), Types.meta(), String.t()) :: String.t()
+  defp bucket_and_path(definition, meta, path) do
     definition
-    |> CloudStorage.bucket()
+    |> CloudStorage.bucket(meta)
     |> Path.join(path)
   end
 

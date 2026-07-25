@@ -51,7 +51,7 @@ defmodule Waffle.Storage.Google.CloudStorage do
       |> get_gcs_optional_params(version, meta)
       |> ensure_keyword_list()
 
-    insert(conn(), bucket(definition), path, data(meta), gcs_options, gcs_optional_params)
+    insert(conn(), bucket(definition, meta), path, data(meta), gcs_options, gcs_optional_params)
   end
 
   @doc """
@@ -61,7 +61,7 @@ defmodule Waffle.Storage.Google.CloudStorage do
   def delete(definition, version, meta) do
     Objects.storage_objects_delete(
       conn(),
-      bucket(definition),
+      bucket(definition, meta),
       path_for(definition, version, meta)
     )
   end
@@ -94,9 +94,29 @@ defmodule Waffle.Storage.Google.CloudStorage do
 
   @doc """
   Returns the bucket for file uploads.
+
+  When `meta` (`{file, scope}`) is given, the definition's `bucket/1` callback
+  is preferred — matching the S3 adapter — so a definition can select a bucket
+  per file/scope:
+
+  ```elixir
+  def bucket({_file, scope}), do: scope.bucket || bucket()
+  ```
+
+  `bucket/0` remains the fallback for waffle versions whose definitions don't
+  export `bucket/1`.
   """
-  @spec bucket(Types.definition()) :: String.t()
-  def bucket(definition), do: Util.var(definition.bucket())
+  @spec bucket(Types.definition(), Types.meta() | nil) :: String.t()
+  def bucket(definition, meta \\ nil)
+  def bucket(definition, nil), do: Util.var(definition.bucket())
+
+  def bucket(definition, meta) do
+    if Code.ensure_loaded?(definition) and function_exported?(definition, :bucket, 1) do
+      Util.var(definition.bucket(meta))
+    else
+      Util.var(definition.bucket())
+    end
+  end
 
   @doc """
   Returns the storage directory **within a bucket** to store the file under.
