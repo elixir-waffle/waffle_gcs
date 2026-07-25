@@ -4,6 +4,9 @@
 
 Google Cloud Storage for Waffle
 
+See [CHANGELOG.md](CHANGELOG.md) for notable changes between versions, and
+[UPGRADING.md](UPGRADING.md) for step-by-step upgrade instructions.
+
 ## What's Waffle?
 
 [Waffle](https://github.com/elixir-waffle/waffle) (formerly _Arc_) is a file
@@ -101,7 +104,7 @@ Goth.
 config :waffle,
   storage: Waffle.Storage.Google.CloudStorage,
   bucket: "gcs-bucket-name",
-  token_fetcher: Waffle.Storage.Googke.Token.Fetcher.GothTokenFetcher
+  token_fetcher: Waffle.Storage.Google.Token.GothTokenFetcher
 ```
 
 ## URL Signing
