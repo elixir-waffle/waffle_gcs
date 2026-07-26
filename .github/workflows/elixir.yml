@@ -10,7 +10,7 @@ on:
 jobs:
   # Offline tests: no secrets, so this runs everywhere — including fork PRs.
   # Elixir/OTP entries cover language compat on the main lock; blend entries
-  # (see blend.exs) cover dependency-version compat on the newest pair. The
+  # (see blend.exs) cover dependency-version compat. The
   # old-goth blends automatically skip :integration and :goth_config_swap via
   # test_helper.exs.
   unit:
@@ -45,9 +45,12 @@ jobs:
           - elixir: '1.20'
             otp: '29'
 
-          # Blends run on the newest pair only — dependency-version compat is
-          # their job; language compat is the entries above.
-          - { elixir: '1.20', otp: '29', blend: oldest }
+          # Blends run on the newest pair — dependency-version compat is
+          # their job; language compat is the entries above. Exception: the
+          # oldest blend runs on the floor pair, because waffle < 1.1.10
+          # trips Elixir 1.20's type-checker warnings (and floor deps on the
+          # floor language is the pairing consumers stuck there actually run).
+          - { elixir: '1.15', otp: '26', blend: oldest }
           - { elixir: '1.20', otp: '29', blend: goth_1_2 }
           - { elixir: '1.20', otp: '29', blend: waffle_1_1_10 }
           - { elixir: '1.20', otp: '29', blend: gcs_0_46 }
