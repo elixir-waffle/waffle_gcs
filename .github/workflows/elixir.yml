@@ -25,18 +25,33 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # 1.15 is the floor — see the elixir: comment in mix.exs.
+          # 1.15 is the floor declared in mix.exs; each entry pairs with the
+          # newest OTP that Elixir version supports.
           - elixir: '1.15'
             otp: '26'
 
           - elixir: '1.16'
             otp: '26'
 
-          - { elixir: '1.16', otp: '26', blend: oldest }
-          - { elixir: '1.16', otp: '26', blend: goth_1_2 }
-          - { elixir: '1.16', otp: '26', blend: waffle_1_1_10 }
-          - { elixir: '1.16', otp: '26', blend: gcs_0_46 }
-          - { elixir: '1.16', otp: '26', blend: mime_2 }
+          - elixir: '1.17'
+            otp: '27'
+
+          - elixir: '1.18'
+            otp: '27'
+
+          - elixir: '1.19'
+            otp: '28'
+
+          - elixir: '1.20'
+            otp: '29'
+
+          # Blends run on the newest pair only — dependency-version compat is
+          # their job; language compat is the entries above.
+          - { elixir: '1.20', otp: '29', blend: oldest }
+          - { elixir: '1.20', otp: '29', blend: goth_1_2 }
+          - { elixir: '1.20', otp: '29', blend: waffle_1_1_10 }
+          - { elixir: '1.20', otp: '29', blend: gcs_0_46 }
+          - { elixir: '1.20', otp: '29', blend: mime_2 }
     steps:
     - uses: actions/checkout@v4
 
@@ -77,7 +92,7 @@ jobs:
     # Formatter output is only stable within an Elixir version, so check it
     # once on the newest main-lock matrix entry rather than on all of them.
     - name: Check Formatting
-      if: ${{ matrix.elixir == '1.16' && !matrix.blend }}
+      if: ${{ matrix.elixir == '1.20' && !matrix.blend }}
       run: mix format --check-formatted
 
     # MIX_ENV is explicit because `def cli` (which maps test.unit -> :test)
@@ -87,10 +102,9 @@ jobs:
       env:
         MIX_ENV: test
 
-  # Dependency health, no secrets: security advisories (mix deps.audit, with
-  # the accepted-risk ignore list documented in mix.exs), retired hex releases
-  # (mix hex.audit), and blend lockfile drift (a mix.exs dep change must be
-  # followed by `mix blend.get`; regenerated lockfiles must be committed).
+  # Dependency health, no secrets: the hex.audit / deps.audit checks (see the
+  # `audit` alias in mix.exs) and blend lockfile drift (a mix.exs dep change
+  # must be followed by `mix blend.get`; regenerated lockfiles get committed).
   audit:
     name: Deps audit & blend drift
     runs-on: ubuntu-latest
@@ -100,20 +114,20 @@ jobs:
     - name: Set up Elixir
       uses: erlef/setup-beam@v1
       with:
-        elixir-version: '1.16'
-        otp-version: '26'
+        elixir-version: '1.20'
+        otp-version: '29'
 
     - name: Restore dependencies cache
       uses: actions/cache@v4
       with:
         path: deps
-        key: ${{ runner.os }}-26-1.16-mix-dev-${{ hashFiles('mix.lock') }}
-        restore-keys: ${{ runner.os }}-26-1.16-mix-dev-
+        key: ${{ runner.os }}-29-1.20-mix-dev-${{ hashFiles('mix.lock') }}
+        restore-keys: ${{ runner.os }}-29-1.20-mix-dev-
 
     - name: Install dependencies
       run: mix deps.get
 
-    - name: Audit dependencies (hex.audit + deps.audit)
+    - name: Audit dependencies
       run: mix audit
 
     - name: Check blend lockfiles are in sync
@@ -141,8 +155,8 @@ jobs:
     strategy:
       matrix:
         include:
-          - elixir: '1.16'
-            otp: '26'
+          - elixir: '1.20'
+            otp: '29'
     steps:
     - uses: actions/checkout@v4
 
