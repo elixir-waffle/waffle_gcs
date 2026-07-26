@@ -8,15 +8,6 @@ for step-by-step upgrade instructions.
 
 ## [Unreleased]
 
-### Added
-
-- A [blend](https://hex.pm/packages/blend) dependency-version test matrix
-  (`blend.exs`): the suite runs against the oldest and newest dependency
-  versions `mix.exs` claims to support (`BLEND=<name> mix test.unit`), wired
-  into CI alongside the Elixir/OTP matrix
-- `mix audit`: dependency checks via `mix hex.audit` and
-  [mix_audit](https://hex.pm/packages/mix_audit), run in CI
-
 ### Changed
 
 - **Breaking:** `config :waffle, :token_fetcher` is now required and
@@ -48,8 +39,6 @@ for step-by-step upgrade instructions.
   [#45](https://github.com/elixir-waffle/waffle_gcs/pull/45)). Explicit headers
   keep precedence; unknown extensions still fall back to
   `application/octet-stream`.
-- Switch config from `Mix.Config` to `Config`
-  ([#4](https://github.com/elixir-waffle/waffle_gcs/pull/4)) (Rafael Scheffer, @rschef)
 - Bump `google_api_storage` from `~> 0.14` to `~> 0.34` (resolves to `0.37`)
   ([#4](https://github.com/elixir-waffle/waffle_gcs/pull/4),
   [#12](https://github.com/elixir-waffle/waffle_gcs/pull/12))
@@ -63,13 +52,6 @@ for step-by-step upgrade instructions.
   rewrite ([#39](https://github.com/elixir-waffle/waffle_gcs/issues/39))
 - Update repository links to `elixir-waffle/waffle_gcs`
   ([#3](https://github.com/elixir-waffle/waffle_gcs/pull/3))
-- Test suite overhauled: shared GCS test infrastructure, per-run object
-  prefixes with offline-safe cleanup, CI split into a secret-free unit job and
-  a guarded integration job, signing verification and special-character
-  round-trip coverage
-  ([#15](https://github.com/elixir-waffle/waffle_gcs/pull/15),
-  [#42](https://github.com/elixir-waffle/waffle_gcs/pull/42),
-  [#44](https://github.com/elixir-waffle/waffle_gcs/pull/44))
 
 ### Fixed
 
