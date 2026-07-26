@@ -15,6 +15,11 @@
 #     0.2.x. Excluded below when the lib version is < 0.3.0. Run it explicitly
 #     with `mix test --include bucket_with_file_and_scope`.
 #
+# :goth_config_swap
+#     Swaps the legacy Goth.Config identity for offline signing verification,
+#     which needs goth >= 1.3's lazily-started Goth.Config. Excluded below on
+#     old-goth blend runs (see blend.exs).
+#
 # :pending_asset_host, :pending_url_encoding
 #     Correct-but-not-yet-implemented behavior, excluded unconditionally below.
 #     Each test asserts the *intended* behavior and fails today — run one with
@@ -52,8 +57,22 @@ version_gated_excludes =
     []
   end
 
+# Old-goth blend runs (see blend.exs) can't do everything: integration drives
+# Goth through its >= 1.3 API (the start_link below and the
+# Waffle.GothTokenFetcher test support module), and :goth_config_swap tests
+# swap the legacy Goth.Config identity in a way goth < 1.3 doesn't allow.
+# Delete this block (and the :goth_config_swap tag taxonomy entry, the
+# placeholder-identity blocks in config/dev.exs and config/test.exs, and the goth_pre_1_3?
+# clause below) when the goth requirement moves past 1.3.
+Application.load(:goth)
+goth_pre_1_3? = Version.match?(to_string(Application.spec(:goth, :vsn)), "< 1.3.0")
+
+old_goth_excludes = if goth_pre_1_3?, do: [:integration, :goth_config_swap], else: []
+
 # Single configure call: a second `exclude:` would replace, not merge.
-ExUnit.configure(exclude: pending_behavior_excludes ++ version_gated_excludes)
+ExUnit.configure(
+  exclude: pending_behavior_excludes ++ version_gated_excludes ++ old_goth_excludes
+)
 
 ExUnit.start()
 
@@ -76,9 +95,14 @@ end
 
 # Goth (and therefore any credential requirement) only starts when
 # GCP_CREDENTIALS is present: offline runs (`mix test.unit`) need no creds and
-# no network. Integration tests fail without it — by design.
+# no network. Integration tests fail without it — by design. Goth < 1.3 has no
+# start_link/1 (integration is excluded above), so don't start it even when
+# creds are in the environment.
 case System.get_env("GCP_CREDENTIALS") do
   empty when empty in [nil, ""] ->
+    :ok
+
+  _json when goth_pre_1_3? ->
     :ok
 
   json ->

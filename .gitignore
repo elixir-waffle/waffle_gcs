@@ -13,3 +13,7 @@ erl_crash.dump
 *.beam
 /config/*.secret.exs
 /.envrc
+
+# Blend (per-blend deps/builds are throwaway; lockfiles are committed)
+/blend/*/deps/
+/blend/*/_build/

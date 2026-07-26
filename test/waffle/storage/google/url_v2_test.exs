@@ -55,6 +55,11 @@ defmodule Waffle.Storage.Google.UrlV2Test do
     # (key loading, encoding, URL assembly) can change without a live-GCS
     # run proving them again.
 
+    # The identity swap below needs goth >= 1.3's lazily-started legacy
+    # Goth.Config (goth < 1.3 freezes the app-boot config into the child
+    # spec); test_helper.exs excludes the tag on old-goth blend runs.
+    @describetag :goth_config_swap
+
     @client_email "url-v2-signing-test@example.iam.gserviceaccount.com"
     @bucket "signing-test-bucket"
 

@@ -9,26 +9,34 @@ on:
 
 jobs:
   # Offline tests: no secrets, so this runs everywhere — including fork PRs.
+  # Elixir/OTP entries cover language compat on the main lock; blend entries
+  # (see blend.exs) cover dependency-version compat on the newest pair. The
+  # old-goth blends automatically skip :integration and :goth_config_swap via
+  # test_helper.exs.
   unit:
-    name: Unit / offline (OTP ${{ matrix.otp }} | Elixir ${{ matrix.elixir }})
+    name: Unit / offline (OTP ${{ matrix.otp }} | Elixir ${{ matrix.elixir }} | ${{ matrix.blend || 'main lock' }})
     runs-on: ubuntu-latest
+
+    env:
+      BLEND: ${{ matrix.blend }}
 
     strategy:
       # One version's failure shouldn't hide the others' results.
       fail-fast: false
       matrix:
         include:
-          - elixir: '1.13'
-            otp: '24'
-
-          - elixir: '1.14'
-            otp: '25'
-
+          # 1.15 is the floor — see the elixir: comment in mix.exs.
           - elixir: '1.15'
             otp: '26'
 
           - elixir: '1.16'
             otp: '26'
+
+          - { elixir: '1.16', otp: '26', blend: oldest }
+          - { elixir: '1.16', otp: '26', blend: goth_1_2 }
+          - { elixir: '1.16', otp: '26', blend: waffle_1_1_10 }
+          - { elixir: '1.16', otp: '26', blend: gcs_0_46 }
+          - { elixir: '1.16', otp: '26', blend: mime_2 }
     steps:
     - uses: actions/checkout@v4
 
@@ -40,12 +48,23 @@ jobs:
         otp-version: ${{ matrix.otp }}
 
     - name: Restore dependencies cache
+      if: ${{ !matrix.blend }}
       uses: actions/cache@v4
       id: mix-cache
       with:
         path: deps
-        key: ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles('**/mix.lock') }}
+        key: ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles('mix.lock') }}
         restore-keys: ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-
+
+    # Blend runs fetch into blend/<name>/deps (see blend/premix.exs), so they
+    # cache that path keyed on the blend's own lockfile.
+    - name: Restore blend dependencies cache
+      if: ${{ matrix.blend }}
+      uses: actions/cache@v4
+      with:
+        path: blend/${{ matrix.blend }}/deps
+        key: ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-blend-${{ matrix.blend }}-${{ hashFiles(format('blend/{0}/mix.lock', matrix.blend)) }}
+        restore-keys: ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-blend-${{ matrix.blend }}-
 
     - name: Install dependencies
       run: mix deps.get --only test
@@ -56,9 +75,9 @@ jobs:
         MIX_ENV: test
 
     # Formatter output is only stable within an Elixir version, so check it
-    # once on the newest matrix entry rather than on all of them.
+    # once on the newest main-lock matrix entry rather than on all of them.
     - name: Check Formatting
-      if: matrix.elixir == '1.16'
+      if: ${{ matrix.elixir == '1.16' && !matrix.blend }}
       run: mix format --check-formatted
 
     # MIX_ENV is explicit because `def cli` (which maps test.unit -> :test)
@@ -67,6 +86,40 @@ jobs:
       run: mix test.unit
       env:
         MIX_ENV: test
+
+  # Dependency health, no secrets: security advisories (mix deps.audit, with
+  # the accepted-risk ignore list documented in mix.exs), retired hex releases
+  # (mix hex.audit), and blend lockfile drift (a mix.exs dep change must be
+  # followed by `mix blend.get`; regenerated lockfiles must be committed).
+  audit:
+    name: Deps audit & blend drift
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Elixir
+      uses: erlef/setup-beam@v1
+      with:
+        elixir-version: '1.16'
+        otp-version: '26'
+
+    - name: Restore dependencies cache
+      uses: actions/cache@v4
+      with:
+        path: deps
+        key: ${{ runner.os }}-26-1.16-mix-dev-${{ hashFiles('mix.lock') }}
+        restore-keys: ${{ runner.os }}-26-1.16-mix-dev-
+
+    - name: Install dependencies
+      run: mix deps.get
+
+    - name: Audit dependencies (hex.audit + deps.audit)
+      run: mix audit
+
+    - name: Check blend lockfiles are in sync
+      run: |
+        mix blend.get
+        git diff --exit-code blend.exs blend/
 
   # Full suite against real GCS. Secrets don't exist on fork PRs, so this only
   # runs for pushes, manual dispatches, and PRs from branches in this repo.
@@ -105,7 +158,7 @@ jobs:
       id: mix-cache
       with:
         path: deps
-        key: ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles('**/mix.lock') }}
+        key: ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-${{ hashFiles('mix.lock') }}
         restore-keys: ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-mix-
 
     - name: Install dependencies

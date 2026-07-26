@@ -6,3 +6,5 @@ config :waffle,
   token_fetcher: Waffle.GothTokenFetcher
 
 config :goth, json: {:system, "GCP_CREDENTIALS"}
+
+import_config "#{config_env()}.exs"
