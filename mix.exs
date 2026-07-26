@@ -74,7 +74,8 @@ defmodule Waffle.Storage.Google.CloudStorage.MixProject do
 
   defp package do
     [
-      files: ~w(config/config.exs lib LICENSE mix.exs README.md CHANGELOG.md UPGRADING.md),
+      # No config/: a library's config files are never evaluated by consumers.
+      files: ~w(lib LICENSE mix.exs README.md CHANGELOG.md UPGRADING.md),
       licenses: ["Apache-2.0"],
       links: %{
         "GitHub" => "https://github.com/elixir-waffle/waffle_gcs",
