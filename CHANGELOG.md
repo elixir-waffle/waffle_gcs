@@ -15,7 +15,7 @@ for step-by-step upgrade instructions.
   official support for Goth >= 1.3 ([#2](https://github.com/elixir-waffle/waffle_gcs/pull/2))
   (Ulisses Almeida, @ulissesalmeida). A `GothTokenFetcher` is compiled only
   when Goth < 1.3 is present. See [UPGRADING.md](UPGRADING.md#goth--13-and-the-required-token_fetcher).
-- **Breaking:** drop support for Elixir < 1.13 (`elixir: "~> 1.13"` in `mix.exs`)
+- **Breaking:** drop support for Elixir < 1.15 (`elixir: "~> 1.15"` in `mix.exs`)
 - **Breaking:** `CloudStorage.put/3` no longer re-resolves the version
   filename; it joins the storage dir with `file.file_name` as-is, since Waffle
   resolves the name before calling the adapter. Fixes prefix-style
@@ -39,24 +39,19 @@ for step-by-step upgrade instructions.
   [#45](https://github.com/elixir-waffle/waffle_gcs/pull/45)). Explicit headers
   keep precedence; unknown extensions still fall back to
   `application/octet-stream`.
-- Switch config from `Mix.Config` to `Config`
-  ([#4](https://github.com/elixir-waffle/waffle_gcs/pull/4)) (Rafael Scheffer, @rschef)
 - Bump `google_api_storage` from `~> 0.14` to `~> 0.34` (resolves to `0.37`)
   ([#4](https://github.com/elixir-waffle/waffle_gcs/pull/4),
   [#12](https://github.com/elixir-waffle/waffle_gcs/pull/12))
-- Bump `jose` from `1.10.1` to `1.11.6`
+- Bump `jose` from `1.10.1` to `1.11.12`
   ([#6](https://github.com/elixir-waffle/waffle_gcs/pull/6)) (Jim Kane, @fastjames)
 - `mime` becomes a direct dependency (`~> 1.2 or ~> 2.0`; previously transitive)
   ([#45](https://github.com/elixir-waffle/waffle_gcs/pull/45))
+- `tesla` becomes a direct dependency pinned to `1.18.2` (previously
+  transitive via `google_gax`): newer tesla is incompatible with
+  `google_gax`'s compiled-in middleware stack. Pinned pending the client
+  rewrite ([#39](https://github.com/elixir-waffle/waffle_gcs/issues/39))
 - Update repository links to `elixir-waffle/waffle_gcs`
   ([#3](https://github.com/elixir-waffle/waffle_gcs/pull/3))
-- Test suite overhauled: shared GCS test infrastructure, per-run object
-  prefixes with offline-safe cleanup, CI split into a secret-free unit job and
-  a guarded integration job, signing verification and special-character
-  round-trip coverage
-  ([#15](https://github.com/elixir-waffle/waffle_gcs/pull/15),
-  [#42](https://github.com/elixir-waffle/waffle_gcs/pull/42),
-  [#44](https://github.com/elixir-waffle/waffle_gcs/pull/44))
 
 ### Fixed
 

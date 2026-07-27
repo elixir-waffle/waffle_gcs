@@ -7,7 +7,7 @@ Step-by-step notes for upgrading between versions. See
 
 ### Elixir version
 
-Elixir < 1.13 is no longer supported (`mix.exs` now requires `~> 1.13`).
+Elixir < 1.15 is no longer supported (`mix.exs` now requires `~> 1.15`).
 
 ### Goth >= 1.3 and the required `:token_fetcher`
 
