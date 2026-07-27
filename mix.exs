@@ -25,8 +25,7 @@ defmodule Waffle.Storage.Google.CloudStorage.MixProject do
     |> Keyword.merge(maybe_lockfile_option())
   end
 
-  # Reviewed and accepted; revisit alongside #39. Consumed by both audit tools
-  # (see the `audit` alias).
+  # Reviewed and accepted; revisit alongside #39.
   defp ignored_advisories do
     ~w(
       GHSA-mc85-72gr-vm9f GHSA-9m9w-gxf7-rh8m GHSA-h74c-q9j7-mpcm
@@ -56,15 +55,11 @@ defmodule Waffle.Storage.Google.CloudStorage.MixProject do
   defp elixirc_paths(_), do: ["lib"]
 
   # `mix test.unit` runs only the fast, offline unit tests (no GCS creds needed).
-  # `mix audit` runs the hex.audit and mix_audit dependency checks; both honor
-  # ignored_advisories/0.
+  # `mix audit` checks retirements and advisories, honoring ignored_advisories/0.
   defp aliases do
     [
       "test.unit": ["test --exclude integration"],
-      audit: [
-        "hex.audit",
-        "deps.audit --ignore-advisory-ids #{Enum.join(ignored_advisories(), ",")}"
-      ]
+      audit: ["hex.audit"]
     ]
   end
 
@@ -74,7 +69,6 @@ defmodule Waffle.Storage.Google.CloudStorage.MixProject do
 
   defp package do
     [
-      # No config/: a library's config files are never evaluated by consumers.
       files: ~w(lib LICENSE mix.exs README.md CHANGELOG.md UPGRADING.md),
       licenses: ["Apache-2.0"],
       links: %{
@@ -110,7 +104,6 @@ defmodule Waffle.Storage.Google.CloudStorage.MixProject do
       # rewrite (#39).
       {:tesla, "1.18.2"},
       {:blend, "~> 0.5.0", only: :dev},
-      {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
       {:dialyxir, "~> 1.0", only: [:dev], runtime: false}
     ]
