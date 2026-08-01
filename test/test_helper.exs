@@ -36,6 +36,12 @@
 #     when the test would fail today, so the suite stays green.
 # ─────────────────────────────────────────────────────────────────────────────
 
+# :httpc (inets) drives the URL probes in GCSCase. The tesla dependency tree
+# used to carry inets/ssl onto the code path; Mix prunes undeclared OTP apps
+# since Elixir 1.15, so they must be re-added explicitly.
+Mix.ensure_application!(:inets)
+Mix.ensure_application!(:ssl)
+
 lib_version = Mix.Project.config() |> Keyword.fetch!(:version)
 
 # Intended behavior that isn't implemented yet; see the tag taxonomy above.

@@ -33,6 +33,9 @@ defmodule Waffle.GCSCase do
 
   setup_all do
     Application.ensure_all_started(:hackney)
+    # The URL probes below use :httpc; inets was previously started by the
+    # tesla dependency tree and must now be started explicitly.
+    {:ok, _} = Application.ensure_all_started([:inets, :ssl])
     Application.put_env(:waffle, :virtual_host, true)
     Application.put_env(:waffle, :bucket, {:system, "WAFFLE_BUCKET"})
     :ok
@@ -154,19 +157,19 @@ defmodule Waffle.GCSCase do
   # test, or consistent bugs (like #25's double resolution) become invisible.
   defmacro assert_acls_public_reader(definition, rel_path) do
     quote bind_quoted: [definition: definition, rel_path: rel_path] do
-      alias Waffle.Storage.Google.CloudStorage
+      alias Waffle.Storage.Google.{Client, CloudStorage, Object}
 
-      {:ok, %GoogleApi.Storage.V1.Model.ObjectAccessControls{} = acls} =
-        GoogleApi.Storage.V1.Api.ObjectAccessControls.storage_object_access_controls_list(
-          CloudStorage.conn(),
+      {:ok, %Object{acl: acl}} =
+        Client.get(
           CloudStorage.bucket(definition),
-          "#{GCSTest.Run.storage_dir()}/#{rel_path}"
+          "#{GCSTest.Run.storage_dir()}/#{rel_path}",
+          query: [projection: "full"]
         )
 
       assert [
-               %{role: "OWNER", entity: service_account},
-               %{role: "READER", entity: "allUsers"}
-             ] = acls.items |> Enum.sort_by(& &1.role)
+               %{"role" => "OWNER", "entity" => service_account},
+               %{"role" => "READER", "entity" => "allUsers"}
+             ] = acl |> Enum.sort_by(& &1["role"])
 
       assert service_account =~ ".iam.gserviceaccount.com"
     end

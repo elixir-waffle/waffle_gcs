@@ -1,5 +1,4 @@
-alias Waffle.Storage.Google.CloudStorage
-alias GoogleApi.Storage.V1.Api.Objects
+alias Waffle.Storage.Google.Client
 
 defmodule Cleanup do
   @moduledoc """
@@ -20,11 +19,10 @@ defmodule Cleanup do
         :ok
 
       true ->
-        conn = CloudStorage.conn()
         prefix = GCSTest.Run.storage_dir()
 
         Enum.reduce(buckets(), [], fn bucket, errors ->
-          delete_from_bucket(conn, bucket, prefix, errors, nil)
+          delete_from_bucket(bucket, prefix, errors, nil)
         end)
     end
   end
@@ -37,28 +35,29 @@ defmodule Cleanup do
     |> Enum.reject(&(&1 in [nil, ""]))
   end
 
-  def delete_from_bucket(conn, bucket, prefix, errors, page) do
-    case Objects.storage_objects_list(conn, bucket, prefix: prefix, pageToken: page) do
-      {:ok, objects} -> delete_objects(conn, bucket, prefix, errors, objects)
+  def delete_from_bucket(bucket, prefix, errors, page) do
+    query = [prefix: prefix] ++ if page, do: [pageToken: page], else: []
+
+    case Client.list(bucket, query: query) do
+      {:ok, listing} -> delete_objects(bucket, prefix, errors, listing)
       {:error, error} -> [error | errors]
     end
   end
 
-  def delete_objects(_conn, _bucket, _prefix, errors, %{items: []}), do: errors
-  def delete_objects(_conn, _bucket, _prefix, errors, %{items: nil}), do: errors
+  def delete_objects(_bucket, _prefix, errors, %{items: []}), do: errors
 
-  def delete_objects(conn, bucket, prefix, errors, %{items: items, nextPageToken: next}) do
+  def delete_objects(bucket, prefix, errors, %{items: items, next_page_token: next}) do
     errors =
       Enum.reduce(items, errors, fn %{name: name}, errs ->
-        case Objects.storage_objects_delete(conn, bucket, name) do
-          {:ok, _} -> errs
+        case Client.delete(bucket, name) do
+          :ok -> errs
           {:error, err} -> [err | errs]
         end
       end)
 
     case next do
       nil -> errors
-      _ -> delete_from_bucket(conn, bucket, prefix, errors, next)
+      _ -> delete_from_bucket(bucket, prefix, errors, next)
     end
   end
 end

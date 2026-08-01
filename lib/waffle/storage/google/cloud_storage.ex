@@ -1,7 +1,7 @@
 defmodule Waffle.Storage.Google.CloudStorage do
   @moduledoc """
-  The main storage integration for Waffle, this acts primarily as a wrapper
-  around `Google.Api.Storage.V1`. To use this module with Waffle, simply set
+  The main storage integration for Waffle, backed by the built-in GCS client
+  (`Waffle.Storage.Google.Client`). To use this module with Waffle, simply set
   your `:storage` config appropriately:
 
   ```elixir
@@ -12,17 +12,33 @@ defmodule Waffle.Storage.Google.CloudStorage do
   environment variable, otherwise all calls will fail. The credentials available
   through `Goth` must have the appropriate level of access to the bucket,
   otherwise some (or all) calls may fail.
+
+  ## ACLs
+
+  A definition's `acl/2` may return:
+
+    * an atom (`:public_read`, `:authenticated_read`, `:bucket_owner_read`,
+      `:bucket_owner_full_control`, `:project_private`) — sent as the
+      `predefinedAcl` query parameter
+    * `:private` or `nil` — nothing is sent and the bucket's default applies,
+      which is required for buckets with uniform bucket-level access
+    * a string — sent as `predefinedAcl` verbatim
+    * a list of ACL entries (maps) — sent as the object resource's `acl` field
+      (fine-grained buckets only)
   """
 
-  @full_control_scope "https://www.googleapis.com/auth/devstorage.full_control"
-
-  alias GoogleApi.Storage.V1.Connection
-  alias GoogleApi.Storage.V1.Api.Objects
-  alias GoogleApi.Storage.V1.Model.Object
-  alias Waffle.Storage.Google.Util
+  alias Waffle.Storage.Google.{Client, Error, Object, Util}
   alias Waffle.Types
 
-  @type object_or_error :: {:ok, GoogleApi.Storage.V1.Model.Object.t()} | {:error, Tesla.Env.t()}
+  @type object_or_error :: {:ok, Object.t()} | {:error, Error.t()}
+
+  @predefined_acls %{
+    authenticated_read: "authenticatedRead",
+    bucket_owner_full_control: "bucketOwnerFullControl",
+    bucket_owner_read: "bucketOwnerRead",
+    project_private: "projectPrivate",
+    public_read: "publicRead"
+  }
 
   @doc """
   Put a Waffle file in a Google Cloud Storage bucket.
@@ -34,36 +50,34 @@ defmodule Waffle.Storage.Google.CloudStorage do
     # Explicitly not `path_for`.
     # Waffle will have already called `Versioning.resolve_file_name` when calling `definition.store`
     path = Path.join(destination_dir, file.file_name)
-    acl = definition.acl(version, meta)
 
-    gcs_options =
+    {acl_metadata, acl_query} = acl_params(definition.acl(version, meta))
+
+    metadata =
       definition
-      |> get_gcs_options(version, meta)
+      |> optional_callback(:gcs_object_headers, [version, meta])
       |> ensure_keyword_list()
-      |> Keyword.put(:acl, acl)
       # GCS stores objects without a content type as application/octet-stream,
       # so infer one from the filename unless the definition's headers set it.
       |> Keyword.put_new(:contentType, MIME.from_path(file.file_name))
-      |> Enum.into(%{})
+      |> Keyword.merge(acl_metadata)
+      |> Map.new()
 
-    gcs_optional_params =
+    query =
       definition
-      |> get_gcs_optional_params(version, meta)
+      |> optional_callback(:gcs_optional_params, [version, meta])
       |> ensure_keyword_list()
+      |> then(&Keyword.merge(acl_query, &1))
 
-    insert(conn(), bucket(definition, meta), path, data(meta), gcs_options, gcs_optional_params)
+    Client.insert(bucket(definition, meta), path, data(meta), metadata: metadata, query: query)
   end
 
   @doc """
   Delete a file from a Google Cloud Storage bucket.
   """
-  @spec delete(Types.definition(), Types.version(), Types.meta()) :: object_or_error
+  @spec delete(Types.definition(), Types.version(), Types.meta()) :: :ok | {:error, Error.t()}
   def delete(definition, version, meta) do
-    Objects.storage_objects_delete(
-      conn(),
-      bucket(definition, meta),
-      path_for(definition, version, meta)
-    )
+    Client.delete(bucket(definition, meta), path_for(definition, version, meta))
   end
 
   @doc """
@@ -77,19 +91,6 @@ defmodule Waffle.Storage.Google.CloudStorage do
   def url(definition, version, meta, opts \\ []) do
     signer = Util.option(opts, :url_builder, Waffle.Storage.Google.UrlV2)
     signer.build(definition, version, meta, opts)
-  end
-
-  @doc """
-  Constructs a new connection object with scoped authentication. If no scope is
-  provided, the `devstorage.full_control` scope is used as a default.
-  """
-  @spec conn(String.t()) :: Tesla.Env.client()
-  def conn(scope \\ @full_control_scope) do
-    token_store = Application.fetch_env!(:waffle, :token_fetcher)
-
-    scope
-    |> token_store.get_token()
-    |> Connection.new()
   end
 
   @doc """
@@ -146,63 +147,35 @@ defmodule Waffle.Storage.Google.CloudStorage do
     Waffle.Definition.Versioning.resolve_file_name(definition, version, meta)
   end
 
-  @spec data({Types.file(), String.t()}) :: {:file | :binary, String.t()}
+  @spec data({Types.file(), String.t()}) :: Client.data()
   defp data({%{binary: nil, path: path}, _}), do: {:file, path}
   defp data({%{binary: data}, _}), do: {:binary, data}
 
-  @spec insert(
-          Tesla.Env.client(),
-          String.t(),
-          String.t(),
-          {:file | :binary, String.t()},
-          map(),
-          list()
-        ) :: object_or_error
-  defp insert(conn, bucket, name, {:file, path}, gcs_options, gcs_optional_params) do
-    object =
-      %Object{name: name}
-      |> Map.merge(gcs_options)
+  @spec acl_params(term()) :: {Keyword.t(), Keyword.t()}
+  defp acl_params(nil), do: {[], []}
+  defp acl_params(:private), do: {[], []}
 
-    Objects.storage_objects_insert_simple(
-      conn,
-      bucket,
-      "multipart",
-      object,
-      path,
-      gcs_optional_params
-    )
-  end
+  defp acl_params(acl) when is_atom(acl) do
+    case @predefined_acls do
+      %{^acl => predefined} ->
+        {[], [predefinedAcl: predefined]}
 
-  defp insert(conn, bucket, name, {:binary, data}, gcs_options, gcs_optional_params) do
-    object =
-      %Object{name: name}
-      |> Map.merge(gcs_options)
-
-    Objects.storage_objects_insert_iodata(
-      conn,
-      bucket,
-      "multipart",
-      object,
-      data,
-      gcs_optional_params
-    )
-  end
-
-  defp get_gcs_options(definition, version, meta) do
-    try do
-      apply(definition, :gcs_object_headers, [version, meta])
-    rescue
-      UndefinedFunctionError ->
-        []
+      _ ->
+        raise ArgumentError,
+              "unsupported ACL #{inspect(acl)}; supported atoms: " <>
+                "#{inspect([:private | Map.keys(@predefined_acls)])}, " <>
+                "a predefinedAcl string, or a list of ACL entries"
     end
   end
 
-  defp get_gcs_optional_params(definition, version, meta) do
-    try do
-      apply(definition, :gcs_optional_params, [version, meta])
-    rescue
-      UndefinedFunctionError ->
-        []
+  defp acl_params(acl) when is_binary(acl), do: {[], [predefinedAcl: acl]}
+  defp acl_params(acl) when is_list(acl), do: {[acl: acl], []}
+
+  defp optional_callback(definition, fun, args) do
+    if Code.ensure_loaded?(definition) and function_exported?(definition, fun, length(args)) do
+      apply(definition, fun, args)
+    else
+      []
     end
   end
 
