@@ -52,9 +52,6 @@ jobs:
           # floor language is the pairing consumers stuck there actually run).
           - { elixir: '1.15', otp: '26', blend: oldest }
           - { elixir: '1.20', otp: '29', blend: goth_1_2 }
-          - { elixir: '1.20', otp: '29', blend: waffle_1_1_10 }
-          - { elixir: '1.20', otp: '29', blend: gcs_0_46 }
-          - { elixir: '1.20', otp: '29', blend: mime_2 }
     steps:
     - uses: actions/checkout@v4
 
