@@ -25,11 +25,11 @@ defmodule Waffle.Storage.Google.CloudStorage.MixProject do
     |> Keyword.merge(maybe_lockfile_option())
   end
 
-  # Reviewed and accepted; revisit alongside #39.
+  # hackney, transitive via waffle ~> 1.1; fixed only in hackney 4.x, which
+  # waffle's ~> 1.9 constraint can't reach. Reviewed and accepted — hackney
+  # is only used for waffle's own remote-file downloads, not by this adapter.
   defp ignored_advisories do
     ~w(
-      GHSA-mc85-72gr-vm9f GHSA-9m9w-gxf7-rh8m GHSA-h74c-q9j7-mpcm
-      GHSA-28jh-g32x-v9v4 GHSA-q7jx-v53g-848w
       GHSA-gp9c-pm5m-5cxr GHSA-j9wq-vxxc-94wf GHSA-mp55-p8c9-rfw2
       GHSA-pj7v-xfvx-wmjq
     )
@@ -95,17 +95,14 @@ defmodule Waffle.Storage.Google.CloudStorage.MixProject do
     [
       {:waffle, "~> 1.1"},
       {:goth, "~> 1.1"},
-      {:google_api_storage, "~> 0.34"},
-      # Direct dependency for content-type inference (already transitive via
-      # google_gax); google_gax's "~> 1.0" constraint governs resolution.
-      {:mime, "~> 1.2 or ~> 2.0"},
-      # tesla is transitive via google_gax; newer tesla is incompatible with
-      # google_gax's compiled-in middleware stack. Pinned pending the client
-      # rewrite (#39).
-      {:tesla, "1.18.2"},
+      # 0.6.1 is the first release without GHSA-655f-mp8p-96gv.
+      {:req, "~> 0.6.1"},
+      # Direct dependency for content-type inference; the floor is req's.
+      {:mime, "~> 2.0.6 or ~> 2.1"},
       # Default :json_codec for the GCS client (config :waffle_gcs, :json_codec).
       {:jason, "~> 1.2"},
       {:blend, "~> 0.5.0", only: :dev},
+      {:plug, "~> 1.15", only: :test},
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
       {:dialyxir, "~> 1.0", only: [:dev], runtime: false}
     ]

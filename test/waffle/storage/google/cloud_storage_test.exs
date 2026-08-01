@@ -5,7 +5,7 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
   # tests; the put/delete/url round-trips are tagged `:integration` (real GCS).
   use ExUnit.Case, async: false
 
-  alias Waffle.Storage.Google.CloudStorage
+  alias Waffle.Storage.Google.{CloudStorage, Error, Object}
 
   @file_path "test/support/image.png"
 
@@ -83,14 +83,13 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
       assert System.fetch_env!("WAFFLE_BUCKET") == CloudStorage.bucket(GCSTest.PublicUpload)
     end
 
-    # These tests deliberately pin the full result shapes — dependency structs
-    # included — because they are the contract consumers pattern-match on
-    # today. Any change to them (including wrapping in library-owned types)
-    # must show up here as an explicit, versioned decision.
+    # These tests deliberately pin the full result shapes because they are
+    # the contract consumers pattern-match on. Any change to them must show
+    # up here as an explicit, versioned decision.
 
     @tag timeout: 15_000
     test "put/3 uploads a file and returns the GCS object", %{meta: meta, name: name} do
-      assert {:ok, %GoogleApi.Storage.V1.Model.Object{} = object} =
+      assert {:ok, %Object{} = object} =
                CloudStorage.put(GCSTest.PublicUpload, :original, meta)
 
       assert object.name == "#{GCSTest.Run.storage_dir()}/#{name}.png"
@@ -101,14 +100,14 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
       meta =
         {%Waffle.File{binary: File.read!(@file_path), file_name: "#{name}.png"}, nil}
 
-      assert {:ok, %GoogleApi.Storage.V1.Model.Object{}} =
+      assert {:ok, %Object{}} =
                CloudStorage.put(GCSTest.PublicUpload, :original, meta)
     end
 
     @tag timeout: 15_000
     test "put/3 fails for an invalid bucket", %{meta: meta} do
       # 403, not 404: GCS does not disclose bucket existence on insert.
-      assert {:error, %Tesla.Env{status: 403}} =
+      assert {:error, %Error{status: 403, response: %{status: 403}}} =
                CloudStorage.put(GCSTest.InvalidBucket, :original, meta)
     end
 
@@ -116,16 +115,15 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
     test "delete/3 removes an existing object", %{meta: meta} do
       assert {:ok, _} = CloudStorage.put(GCSTest.PublicUpload, :original, meta)
 
-      assert {:ok, %Tesla.Env{status: 204}} =
-               CloudStorage.delete(GCSTest.PublicUpload, :original, meta)
+      assert :ok = CloudStorage.delete(GCSTest.PublicUpload, :original, meta)
     end
 
     @tag timeout: 15_000
     test "delete/3 fails for a non-existent object or invalid bucket", %{meta: meta} do
-      assert {:error, %Tesla.Env{status: 404}} =
+      assert {:error, %Error{status: 404}} =
                CloudStorage.delete(GCSTest.PublicUpload, :original, meta)
 
-      assert {:error, %Tesla.Env{status: 404}} =
+      assert {:error, %Error{status: 404}} =
                CloudStorage.delete(GCSTest.InvalidBucket, :original, meta)
     end
 
