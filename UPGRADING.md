@@ -141,6 +141,46 @@ final object name in `file.file_name` — it will no longer be re-resolved for
 you. `path_for/3` and `fullname/3` are unchanged and still resolve names
 exactly once.
 
+### New GCS client: result types and removed functions
+
+The `google_api_storage`/`google_gax`/`tesla`/`poison` stack is replaced by a
+built-in client on [req](https://hex.pm/packages/req). Uploads, deletes, and
+URL generation through `definition.store/delete/url` behave the same — but if
+you pattern-match adapter results or dependency types, update:
+
+- `CloudStorage.put/3` returns `{:ok, %Waffle.Storage.Google.Object{}}` (was
+  `{:ok, %GoogleApi.Storage.V1.Model.Object{}}`) or
+  `{:error, %Waffle.Storage.Google.Error{}}` (was `{:error, %Tesla.Env{}}`).
+  `Object` carries `name`/`bucket`/`content_type`/`size`/`generation`/`acl`,
+  plus the transport response under `response`.
+- `CloudStorage.delete/3` returns `:ok` (was `{:ok, %Tesla.Env{status: 204}}`)
+  or `{:error, %Waffle.Storage.Google.Error{}}`.
+- `CloudStorage.conn/0,1` is removed — there is no Tesla client to build.
+  The HTTP layer is a behaviour; see `Waffle.Storage.Google.Transport`.
+- If your app depended on `tesla`, `poison`, or the `GoogleApi.*` modules
+  being present transitively, declare them yourself (and note tesla can now
+  float past 1.18.2).
+
+### ACL atoms now work (and unknown ones raise)
+
+Atom ACLs are mapped to GCS's `predefinedAcl` upload parameter instead of
+being silently dropped: `@acl :public_read` now actually makes objects
+public-readable (previously it uploaded a private object with no error).
+`:private`/`nil` send nothing so the bucket default applies — required for
+buckets with uniform bucket-level access. Unrecognized atoms raise
+`ArgumentError`. A list ACL is still sent as the object resource's `acl`
+field (fine-grained buckets only).
+
+If a definition relied on `@acl :public_read` being ignored, its uploads
+become public-readable on 0.3 — remove the ACL to keep them private.
+
+### Callback errors are no longer swallowed
+
+An exception raised *inside* your `gcs_object_headers/2` or
+`gcs_optional_params/2` implementation now propagates instead of being
+silently rescued (which used to drop all your headers). Code that
+accidentally depended on the rescue will start seeing its own errors.
+
 ## From v0.1.x to v0.2.0
 
 - `waffle` moved from `0.0.3` to `~> 1.1`; follow waffle's own upgrade notes

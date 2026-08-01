@@ -10,6 +10,26 @@ for step-by-step upgrade instructions.
 
 ### Changed
 
+- **Breaking:** the Google client stack is replaced by a built-in minimal GCS
+  JSON API client on [req](https://hex.pm/packages/req)
+  ([#39](https://github.com/elixir-waffle/waffle_gcs/issues/39),
+  [#32](https://github.com/elixir-waffle/waffle_gcs/issues/32)).
+  `google_api_storage`, `google_gax`, `tesla`, and `poison` leave the
+  dependency tree — including the tesla `1.18.2` pin and its five unfixable
+  advisories — and `req`/`finch`/`mint` enter. `CloudStorage.put/3` returns
+  `{:ok, %Waffle.Storage.Google.Object{}}` / `{:error, %Waffle.Storage.Google.Error{}}`
+  (was `GoogleApi.Storage.V1.Model.Object` / `Tesla.Env`), `delete/3` returns
+  `:ok` on success, and `CloudStorage.conn/0,1` is removed. The HTTP transport
+  and JSON codec are configurable seams
+  (`config :waffle_gcs, :transport` / `:json_codec`). See
+  [UPGRADING.md](UPGRADING.md#new-gcs-client-result-types-and-removed-functions).
+- **Breaking:** S3-style atom ACLs (`:public_read`, ...) now map to GCS's
+  `predefinedAcl` upload parameter instead of being silently dropped —
+  `@acl :public_read` actually makes objects public-readable;
+  `:private`/`nil` send nothing (bucket default; compatible with uniform
+  bucket-level access); unknown atoms raise
+  ([#27](https://github.com/elixir-waffle/waffle_gcs/issues/27)). See
+  [UPGRADING.md](UPGRADING.md#acl-atoms-now-work-and-unknown-ones-raise).
 - **Breaking:** `config :waffle, :token_fetcher` is now required and
   `Waffle.Storage.Google.Token.DefaultFetcher` has been removed, adding
   official support for Goth >= 1.3 ([#2](https://github.com/elixir-waffle/waffle_gcs/pull/2))
@@ -39,22 +59,20 @@ for step-by-step upgrade instructions.
   [#45](https://github.com/elixir-waffle/waffle_gcs/pull/45)). Explicit headers
   keep precedence; unknown extensions still fall back to
   `application/octet-stream`.
-- Bump `google_api_storage` from `~> 0.14` to `~> 0.34` (resolves to `0.37`)
-  ([#4](https://github.com/elixir-waffle/waffle_gcs/pull/4),
-  [#12](https://github.com/elixir-waffle/waffle_gcs/pull/12))
 - Bump `jose` from `1.10.1` to `1.11.12`
   ([#6](https://github.com/elixir-waffle/waffle_gcs/pull/6)) (Jim Kane, @fastjames)
-- `mime` becomes a direct dependency (`~> 1.2 or ~> 2.0`; previously transitive)
+- `mime` becomes a direct dependency, `~> 2.0.6 or ~> 2.1` (previously
+  transitive, resolving to 1.x)
   ([#45](https://github.com/elixir-waffle/waffle_gcs/pull/45))
-- `tesla` becomes a direct dependency pinned to `1.18.2` (previously
-  transitive via `google_gax`): newer tesla is incompatible with
-  `google_gax`'s compiled-in middleware stack. Pinned pending the client
-  rewrite ([#39](https://github.com/elixir-waffle/waffle_gcs/issues/39))
 - Update repository links to `elixir-waffle/waffle_gcs`
   ([#3](https://github.com/elixir-waffle/waffle_gcs/pull/3))
 
 ### Fixed
 
+- An exception raised inside a definition's `gcs_object_headers/2` or
+  `gcs_optional_params/2` now propagates instead of being silently swallowed
+  (which dropped all custom headers with no warning)
+  ([#30](https://github.com/elixir-waffle/waffle_gcs/issues/30))
 - Fix `resolve_file_name` being applied twice during `put`, which doubled
   prefix-style `filename/2` results in the stored object name
   ([#25](https://github.com/elixir-waffle/waffle_gcs/issues/25),
