@@ -173,14 +173,23 @@ defmodule Waffle.Storage.Google.Client do
   defp read_data({:file, path}), do: File.read!(path)
   defp read_data({:binary, data}), do: data
 
+  @ascii_printable_chars 32..126
+
+  defp printable_ascii_line?(<<byte>>) when byte in @ascii_printable_chars, do: true
+
+  defp printable_ascii_line?(<<byte, rest::binary>>) when byte in @ascii_printable_chars,
+    do: printable_ascii_line?(rest)
+
+  defp printable_ascii_line?(_), do: false
+
   defp media_content_type(metadata) do
     content_type = metadata[:contentType] || metadata["contentType"] || "application/octet-stream"
 
-    unless is_binary(content_type) and content_type =~ ~r/^[\x20-\x7e]+$/ do
+    if printable_ascii_line?(content_type) do
+      content_type
+    else
       raise ArgumentError, "invalid contentType for upload: #{inspect(content_type)}"
     end
-
-    content_type
   end
 
   defp generate_boundary do

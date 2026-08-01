@@ -78,7 +78,13 @@ defmodule Waffle.Storage.Google.ClientTest do
     end
 
     test "rejects a contentType that could break out of the part header" do
-      for bad <- ["image/png\r\nX-Evil: 1", "image/png\nX-Evil: 1", :png, "imagé/png"] do
+      for bad <- [
+            "image/png\r\nX-Evil: 1",
+            "image/png\nX-Evil: 1",
+            "image/png\n",
+            :png,
+            "imagé/png"
+          ] do
         assert_raise ArgumentError, fn ->
           Client.insert_request("bucket", %{name: "x", contentType: bad}, "BYTES")
         end
