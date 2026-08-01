@@ -5,8 +5,8 @@ defmodule Waffle.Storage.Google.Client do
   `Waffle.Storage.Google.Transport`.
 
   Results are library-owned types: `Waffle.Storage.Google.Object` on success
-  and `Waffle.Storage.Google.Error` on failure, both carrying the raw
-  transport response under `:raw`.
+  and `Waffle.Storage.Google.Error` on failure, both carrying the transport
+  response under `:response`.
 
   Configuration (all optional):
 
@@ -18,7 +18,12 @@ defmodule Waffle.Storage.Google.Client do
   ```
 
   Every option can also be passed per call (`:transport`, `:json_codec`,
-  `:scope`).
+  `:base_url`, `:scope`).
+
+  Map keys and query parameters use the GCS JSON API's own names verbatim
+  (`contentType`, `predefinedAcl`, `pageToken`, ...) — they are wire-protocol
+  identifiers, not Elixir ones, and consumers already pass them through
+  `gcs_object_headers/2` and `gcs_optional_params/2` in that spelling.
   """
 
   alias Waffle.Storage.Google.{Error, Object, Util}
@@ -26,30 +31,61 @@ defmodule Waffle.Storage.Google.Client do
 
   @base_url "https://storage.googleapis.com"
   @full_control_scope "https://www.googleapis.com/auth/devstorage.full_control"
+  @default_json_codec Jason
+  @default_transport Waffle.Storage.Google.Transport.Req
 
   @type data :: {:file, Path.t()} | {:binary, binary()}
   @type object_result :: {:ok, Object.t()} | {:error, Error.t()}
 
+  @typedoc "Per-call options resolved once against application config; see `build_config/1`."
+  @type config :: %{
+          transport: module(),
+          json_codec: module(),
+          base_url: String.t(),
+          scope: String.t(),
+          boundary: String.t() | nil
+        }
+
+  @doc """
+  Resolves per-call options against application config and defaults, once,
+  so the resolution cost and precedence live in a single place.
+  """
+  @spec build_config(keyword()) :: config()
+  def build_config(opts \\ []) do
+    %{
+      transport: resolve(opts, :transport, @default_transport),
+      json_codec: resolve(opts, :json_codec, @default_json_codec),
+      base_url: resolve(opts, :base_url, @base_url),
+      scope: Keyword.get(opts, :scope, @full_control_scope),
+      boundary: Keyword.get(opts, :boundary)
+    }
+  end
+
+  defp resolve(opts, key, default) do
+    opts[key] || Application.get_env(:waffle_gcs, key, default)
+  end
+
   @doc """
   Uploads an object in a single `multipart/related` request.
 
-  `metadata` is the object resource sent as the JSON part (`:name` is set from
-  `name`); entries like `:contentType` and `:acl` go here. Options:
-
-    * `:query` — extra query parameters (e.g. `predefinedAcl: "publicRead"`)
-    * `:metadata` — the object resource map
+  `:metadata` is the object resource sent as the JSON part (`name` is set from
+  `name`); entries like `contentType` and `acl` go here. `:query` passes extra
+  query parameters (e.g. `predefinedAcl: "publicRead"`).
   """
   @spec insert(String.t(), String.t(), data(), keyword()) :: object_result()
   def insert(bucket, name, data, opts \\ []) do
+    config = build_config(opts)
+
     metadata =
       opts
       |> Keyword.get(:metadata, %{})
-      |> Map.put(:name, name)
+      |> normalize_metadata()
+      |> Map.put("name", name)
 
     bucket
-    |> insert_request(metadata, read_data(data), Keyword.get(opts, :query, []), opts)
-    |> execute(opts)
-    |> map_object(opts)
+    |> insert_request(metadata, read_data(data), Keyword.get(opts, :query, []), config)
+    |> execute(config, opts)
+    |> map_object(config)
   end
 
   @doc """
@@ -58,10 +94,12 @@ defmodule Waffle.Storage.Google.Client do
   """
   @spec get(String.t(), String.t(), keyword()) :: object_result()
   def get(bucket, name, opts \\ []) do
+    config = build_config(opts)
+
     bucket
-    |> get_request(name, Keyword.get(opts, :query, []))
-    |> execute(opts)
-    |> map_object(opts)
+    |> get_request(name, Keyword.get(opts, :query, []), config)
+    |> execute(config, opts)
+    |> map_object(config)
   end
 
   @doc """
@@ -69,12 +107,14 @@ defmodule Waffle.Storage.Google.Client do
   """
   @spec delete(String.t(), String.t(), keyword()) :: :ok | {:error, Error.t()}
   def delete(bucket, name, opts \\ []) do
+    config = build_config(opts)
+
     bucket
-    |> delete_request(name)
-    |> execute(opts)
+    |> delete_request(name, config)
+    |> execute(config, opts)
     |> case do
       {:ok, %Response{status: status}} when status in 200..299 -> :ok
-      other -> {:error, to_error(other, opts)}
+      other -> {:error, to_error(other, config)}
     end
   end
 
@@ -82,17 +122,19 @@ defmodule Waffle.Storage.Google.Client do
   Lists objects in a bucket. Supports `query: [prefix: ..., pageToken: ...]`.
 
   Returns `{:ok, %{items: [Object.t()], next_page_token: String.t() | nil}}`;
-  listed objects carry `raw: nil`.
+  listed objects carry `response: nil`.
   """
   @spec list(String.t(), keyword()) ::
           {:ok, %{items: [Object.t()], next_page_token: String.t() | nil}} | {:error, Error.t()}
   def list(bucket, opts \\ []) do
+    config = build_config(opts)
+
     bucket
-    |> list_request(Keyword.get(opts, :query, []))
-    |> execute(opts)
+    |> list_request(Keyword.get(opts, :query, []), config)
+    |> execute(config, opts)
     |> case do
       {:ok, %Response{status: status, body: body}} when status in 200..299 ->
-        decoded = json_codec(opts).decode!(body)
+        decoded = config.json_codec.decode!(body)
 
         {:ok,
          %{
@@ -101,7 +143,7 @@ defmodule Waffle.Storage.Google.Client do
          }}
 
       other ->
-        {:error, to_error(other, opts)}
+        {:error, to_error(other, config)}
     end
   end
 
@@ -110,18 +152,19 @@ defmodule Waffle.Storage.Google.Client do
 
   The multipart framing is entirely library-controlled: a random boundary and
   constant part headers, except the media part's `Content-Type`, which mirrors
-  the metadata's `:contentType` (as `google_gax` did) and is validated to be a
+  the metadata's `contentType` (as `google_gax` did) and is validated to be a
   single printable-ASCII line.
   """
-  @spec insert_request(String.t(), map(), iodata(), keyword(), keyword()) :: Request.t()
-  def insert_request(bucket, metadata, bytes, query \\ [], opts \\ []) do
-    boundary = Keyword.get_lazy(opts, :boundary, &generate_boundary/0)
+  @spec insert_request(String.t(), map(), iodata(), keyword(), config()) :: Request.t()
+  def insert_request(bucket, metadata, bytes, query \\ [], config \\ build_config()) do
+    metadata = normalize_metadata(metadata)
+    boundary = config.boundary || generate_boundary()
 
     body = [
       "--",
       boundary,
       "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n",
-      json_codec(opts).encode!(metadata),
+      config.json_codec.encode!(metadata),
       "\r\n--",
       boundary,
       "\r\nContent-Type: ",
@@ -135,40 +178,44 @@ defmodule Waffle.Storage.Google.Client do
 
     %Request{
       method: :post,
-      url: base_url(opts) <> "/upload/storage/v1/b/" <> encode(bucket) <> "/o",
-      query: [uploadType: "multipart"] ++ query,
+      url: config.base_url <> "/upload/storage/v1/b/" <> encode(bucket) <> "/o",
+      query: [{:uploadType, "multipart"} | query],
       headers: [{"content-type", "multipart/related; boundary=" <> boundary}],
       body: body
     }
   end
 
   @doc false
-  @spec get_request(String.t(), String.t(), keyword()) :: Request.t()
-  def get_request(bucket, name, query \\ []) do
-    %Request{method: :get, url: object_url(bucket, name, []), query: query}
+  @spec get_request(String.t(), String.t(), keyword(), config()) :: Request.t()
+  def get_request(bucket, name, query \\ [], config \\ build_config()) do
+    %Request{method: :get, url: object_url(bucket, name, config), query: query}
   end
 
   @doc false
-  @spec delete_request(String.t(), String.t()) :: Request.t()
-  def delete_request(bucket, name) do
-    %Request{method: :delete, url: object_url(bucket, name, [])}
+  @spec delete_request(String.t(), String.t(), config()) :: Request.t()
+  def delete_request(bucket, name, config \\ build_config()) do
+    %Request{method: :delete, url: object_url(bucket, name, config)}
   end
 
   @doc false
-  @spec list_request(String.t(), keyword()) :: Request.t()
-  def list_request(bucket, query \\ []) do
+  @spec list_request(String.t(), keyword(), config()) :: Request.t()
+  def list_request(bucket, query \\ [], config \\ build_config()) do
     %Request{
       method: :get,
-      url: base_url([]) <> "/storage/v1/b/" <> encode(bucket) <> "/o",
+      url: config.base_url <> "/storage/v1/b/" <> encode(bucket) <> "/o",
       query: query
     }
   end
 
-  defp object_url(bucket, name, opts) do
-    base_url(opts) <> "/storage/v1/b/" <> encode(bucket) <> "/o/" <> encode(name)
+  defp object_url(bucket, name, config) do
+    config.base_url <> "/storage/v1/b/" <> encode(bucket) <> "/o/" <> encode(name)
   end
 
   defp encode(segment), do: Util.encode_object_name(segment)
+
+  defp normalize_metadata(metadata) do
+    Map.new(metadata, fn {key, value} -> {to_string(key), value} end)
+  end
 
   defp read_data({:file, path}), do: File.read!(path)
   defp read_data({:binary, data}), do: data
@@ -183,7 +230,7 @@ defmodule Waffle.Storage.Google.Client do
   defp printable_ascii_line?(_), do: false
 
   defp media_content_type(metadata) do
-    content_type = metadata[:contentType] || metadata["contentType"] || "application/octet-stream"
+    content_type = metadata["contentType"] || "application/octet-stream"
 
     if printable_ascii_line?(content_type) do
       content_type
@@ -196,42 +243,29 @@ defmodule Waffle.Storage.Google.Client do
     "waffle_gcs_" <> Base.encode16(:crypto.strong_rand_bytes(16), case: :lower)
   end
 
-  defp execute(%Request{} = request, opts) do
-    transport =
-      opts[:transport] ||
-        Application.get_env(:waffle_gcs, :transport, Waffle.Storage.Google.Transport.Req)
-
-    transport.execute(authorize(request, opts), opts)
+  defp execute(%Request{} = request, config, opts) do
+    config.transport.execute(authorize(request, config), opts)
   end
 
-  defp authorize(%Request{} = request, opts) do
+  defp authorize(%Request{} = request, config) do
     token_fetcher = Application.fetch_env!(:waffle, :token_fetcher)
-    scope = Keyword.get(opts, :scope, @full_control_scope)
-    token = token_fetcher.get_token(scope)
+    token = token_fetcher.get_token(config.scope)
 
     %{request | headers: [{"authorization", "Bearer " <> token} | request.headers]}
   end
 
-  defp map_object({:ok, %Response{status: status, body: body} = response}, opts)
+  defp map_object({:ok, %Response{status: status, body: body} = response}, config)
        when status in 200..299 do
-    {:ok, body |> json_codec(opts).decode!() |> Object.from_map(response)}
+    {:ok, body |> config.json_codec.decode!() |> Object.from_map(response)}
   end
 
-  defp map_object(other, opts), do: {:error, to_error(other, opts)}
+  defp map_object(other, config), do: {:error, to_error(other, config)}
 
-  defp to_error({:ok, %Response{} = response}, opts) do
-    Error.from_response(response, json_codec(opts))
+  defp to_error({:ok, %Response{} = response}, config) do
+    Error.from_response(response, config.json_codec)
   end
 
-  defp to_error({:error, reason}, _opts) do
-    %Error{status: nil, reason: reason, raw: nil}
-  end
-
-  defp json_codec(opts) do
-    opts[:json_codec] || Application.get_env(:waffle_gcs, :json_codec, Jason)
-  end
-
-  defp base_url(opts) do
-    opts[:base_url] || Application.get_env(:waffle_gcs, :base_url, @base_url)
+  defp to_error({:error, reason}, _config) do
+    %Error{status: nil, reason: reason, response: nil}
   end
 end

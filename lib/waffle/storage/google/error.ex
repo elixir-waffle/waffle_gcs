@@ -4,20 +4,20 @@ defmodule Waffle.Storage.Google.Error do
 
   For HTTP-level failures, `status` is the response status, `reason` is the
   message from the GCS error body (falling back to the decoded body, then the
-  raw body), and `raw` holds the `Waffle.Storage.Google.Client.Response`.
+  raw body), and `response` holds the `Waffle.Storage.Google.Client.Response`.
 
-  For connection-level failures (nothing came back), `status` and `raw` are
-  `nil` and `reason` carries the transport's error term.
+  For connection-level failures (nothing came back), `status` and `response`
+  are `nil` and `reason` carries the transport's error term.
   """
 
   alias Waffle.Storage.Google.Client.Response
 
-  defexception [:status, :reason, :raw]
+  defexception [:status, :reason, :response]
 
   @type t :: %__MODULE__{
           status: non_neg_integer() | nil,
           reason: term(),
-          raw: Response.t() | nil
+          response: Response.t() | nil
         }
 
   @doc """
@@ -32,7 +32,7 @@ defmodule Waffle.Storage.Google.Error do
         {:error, _} -> body
       end
 
-    %__MODULE__{status: status, reason: reason, raw: response}
+    %__MODULE__{status: status, reason: reason, response: response}
   end
 
   @impl true

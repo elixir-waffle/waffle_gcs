@@ -39,8 +39,12 @@ defmodule Waffle.Storage.Google.ClientTest do
       metadata = %{name: "uploads/img.png", contentType: "image/png"}
 
       request =
-        Client.insert_request("bucket", metadata, "BYTES", [predefinedAcl: "publicRead"],
-          boundary: "BOUNDARY"
+        Client.insert_request(
+          "bucket",
+          metadata,
+          "BYTES",
+          [predefinedAcl: "publicRead"],
+          Client.build_config(boundary: "BOUNDARY")
         )
 
       assert %Request{method: :post, url: url, query: query, headers: headers, body: body} =
@@ -53,7 +57,7 @@ defmodule Waffle.Storage.Google.ClientTest do
       assert IO.iodata_to_binary(body) ==
                "--BOUNDARY\r\n" <>
                  "Content-Type: application/json; charset=UTF-8\r\n\r\n" <>
-                 Jason.encode!(metadata) <>
+                 Jason.encode!(%{"name" => "uploads/img.png", "contentType" => "image/png"}) <>
                  "\r\n--BOUNDARY\r\n" <>
                  "Content-Type: image/png\r\n\r\n" <>
                  "BYTES" <>
@@ -61,7 +65,8 @@ defmodule Waffle.Storage.Google.ClientTest do
     end
 
     test "media part content type defaults to application/octet-stream" do
-      request = Client.insert_request("bucket", %{name: "x"}, "BYTES", [], boundary: "B")
+      request =
+        Client.insert_request("bucket", %{name: "x"}, "BYTES", [], Client.build_config())
 
       assert IO.iodata_to_binary(request.body) =~ "\r\nContent-Type: application/octet-stream\r\n"
     end
@@ -116,7 +121,7 @@ defmodule Waffle.Storage.Google.ClientTest do
     @object_json ~s({"name": "uploads/img.png", "bucket": "bucket", "size": "5", ) <>
                    ~s("generation": "123", "contentType": "image/png"})
 
-    test "returns {:ok, %Object{}} with raw response on 2xx" do
+    test "returns {:ok, %Object{}} with the transport response on 2xx" do
       assert {:ok, %Object{} = object} =
                Client.insert(
                  "bucket",
@@ -130,7 +135,7 @@ defmodule Waffle.Storage.Google.ClientTest do
       assert object.size == 5
       assert object.generation == "123"
       assert object.content_type == "image/png"
-      assert %Response{status: 200, body: @object_json} = object.raw
+      assert %Response{status: 200, body: @object_json} = object.response
     end
 
     test "authorizes with the configured token fetcher" do
@@ -166,12 +171,12 @@ defmodule Waffle.Storage.Google.ClientTest do
     test "returns {:error, %Error{}} with the GCS message on HTTP failure" do
       body = ~s({"error": {"code": 403, "message": "Forbidden"}})
 
-      assert {:error, %Error{status: 403, reason: "Forbidden", raw: %Response{status: 403}}} =
+      assert {:error, %Error{status: 403, reason: "Forbidden", response: %Response{status: 403}}} =
                Client.insert("bucket", "x", {:binary, ""}, @opts ++ [respond: respond(403, body)])
     end
 
-    test "wraps connection-level failures with a nil status and raw" do
-      assert {:error, %Error{status: nil, reason: :timeout, raw: nil}} =
+    test "wraps connection-level failures with a nil status and response" do
+      assert {:error, %Error{status: nil, reason: :timeout, response: nil}} =
                Client.insert(
                  "bucket",
                  "x",
@@ -210,7 +215,7 @@ defmodule Waffle.Storage.Google.ClientTest do
 
       assert {:ok,
               %{
-                items: [%Object{name: "a", size: 1, raw: nil}, %Object{name: "b"}],
+                items: [%Object{name: "a", size: 1, response: nil}, %Object{name: "b"}],
                 next_page_token: "tok"
               }} =
                Client.list("bucket", @opts ++ [respond: respond(200, body)])
