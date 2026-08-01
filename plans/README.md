@@ -13,7 +13,7 @@ a gate for the next; nothing later starts until the stage before it holds.
 | [forward-port-to-main.md](forward-port-to-main.md) | Mechanically moving the double-filename fix (#25) + test overhaul from this branch onto `main` | precursor to everything |
 | [0.3-release.md](0.3-release.md) | Everything gating the 0.3 release: lib fixes, token decision, test-infra hazards, test-gap checklist, release mechanics | milestone **v0.3** — #27 #28 #29 #30 #31 #32 #33 #34 #35 #36 #37 (+ #8) |
 | [offline-test-suite.md](offline-test-suite.md) | Dual-targeting the feature suite at fake-gcs-server so refactors are CI-protected without creds | #38 |
-| [client-rewrite.md](client-rewrite.md) | Replacing google_api_storage/google_gax/legacy-Goth with a minimal hand-rolled client; swappable transport, signer-as-adapter, token seam | #39 (+ #14, #16, #18) |
+| [client-rewrite.md](client-rewrite.md) | Replacing google_api_storage/google_gax/legacy-Goth with a minimal hand-rolled client; transport behaviour, signer-as-adapter, token fetcher behaviour | #39 (+ #14, #16, #18) |
 | [migration-and-repair.md](migration-and-repair.md) | `mix waffle_gcs.repair` for doubled filenames, igniter tasks, migration guides | #40 (+ #20, #25) |
 
 ## Priority (2026-07-03)
