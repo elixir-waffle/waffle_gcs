@@ -56,11 +56,11 @@ adapter needs has been stable for a decade and fits in one module:
    fake-gcs-server, is the frozen spec. The rewrite is done when the same suite
    passes against both targets with the new client.
 
-## Architecture: three swappable seams
+## Architecture: three replaceable parts
 
 The organizing principle: every place we currently depend on someone else's
-abandoned abstraction becomes a seam we own, with a behaviour on one side and
-pure functions on the other.
+abandoned abstraction becomes a behaviour we own, with pure functions behind
+it.
 
 ### 1. Transport (the "swappable network layer")
 
@@ -109,7 +109,7 @@ rewrite, and removed when Google turns it off or 1.0, whichever first.
 
 ### 3. Tokens
 
-Keep the `Token.Fetcher` behaviour as the single seam (per the #34 decision in
+Keep the `Token.Fetcher` behaviour (per the #34 decision in
 0.3). The rewrite extends it so **signing credentials flow through the same
 abstraction** — `client_email` + private key, or a signBlob delegate — killing
 the last hardcoded `Goth.Config` reads. Goth (modern API, supervised, named
