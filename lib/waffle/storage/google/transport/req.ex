@@ -9,6 +9,9 @@ defmodule Waffle.Storage.Google.Transport.Req do
   ```elixir
   config :waffle_gcs, Waffle.Storage.Google.Transport.Req, req_options: [...]
   ```
+
+  The request itself and `decode_body: false` (the client decodes bodies)
+  take precedence over `req_options`; `retry: false` is only a default.
   """
 
   @behaviour Waffle.Storage.Google.Transport
@@ -17,16 +20,16 @@ defmodule Waffle.Storage.Google.Transport.Req do
 
   @impl true
   def execute(%Request{} = request, _opts) do
-    [
+    [retry: false]
+    |> Keyword.merge(req_options())
+    |> Keyword.merge(
       method: request.method,
       url: request.url,
       params: request.query,
       headers: request.headers,
-      retry: false,
       decode_body: false
-    ]
+    )
     |> put_body(request.body)
-    |> Keyword.merge(req_options())
     |> Req.request()
     |> case do
       {:ok, %Req.Response{} = response} ->

@@ -53,6 +53,24 @@ defmodule Waffle.Storage.Google.Transport.ReqTest do
     assert {:ok, %Response{body: ~s({"kept": "verbatim"})}} = Transport.Req.execute(request, [])
   end
 
+  test "req_options cannot override the request or body decoding" do
+    Application.put_env(:waffle_gcs, Transport.Req,
+      req_options: [plug: {Req.Test, __MODULE__}, decode_body: true, method: :delete]
+    )
+
+    Req.Test.stub(__MODULE__, fn conn ->
+      assert conn.method == "GET"
+
+      conn
+      |> Plug.Conn.put_resp_content_type("application/json")
+      |> Plug.Conn.resp(200, ~s({"kept": "verbatim"}))
+    end)
+
+    request = %Request{method: :get, url: "https://storage.googleapis.com/storage/v1/b/b/o"}
+
+    assert {:ok, %Response{body: ~s({"kept": "verbatim"})}} = Transport.Req.execute(request, [])
+  end
+
   test "connection-level failures return the transport's exception" do
     Req.Test.stub(__MODULE__, fn conn ->
       Req.Test.transport_error(conn, :econnrefused)

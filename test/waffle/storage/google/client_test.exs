@@ -4,8 +4,6 @@ defmodule Waffle.Storage.Google.ClientTest do
   alias Waffle.Storage.Google.{Client, Error, Object}
   alias Waffle.Storage.Google.Client.{Request, Response}
 
-  doctest Waffle.Storage.Google.Util
-
   defmodule StubFetcher do
     @behaviour Waffle.Storage.Google.Token.Fetcher
     @impl true
@@ -36,12 +34,11 @@ defmodule Waffle.Storage.Google.ClientTest do
 
   describe "insert_request/5" do
     test "assembles the multipart/related body with constant framing" do
-      metadata = %{name: "uploads/img.png", contentType: "image/png"}
-
       request =
         Client.insert_request(
           "bucket",
-          metadata,
+          "uploads/img.png",
+          %{contentType: "image/png"},
           "BYTES",
           [predefinedAcl: "publicRead"],
           Client.build_config(boundary: "BOUNDARY")
@@ -65,18 +62,17 @@ defmodule Waffle.Storage.Google.ClientTest do
     end
 
     test "media part content type defaults to application/octet-stream" do
-      request =
-        Client.insert_request("bucket", %{name: "x"}, "BYTES", [], Client.build_config())
+      request = Client.insert_request("bucket", "x", %{}, "BYTES", [], Client.build_config())
 
       assert IO.iodata_to_binary(request.body) =~ "\r\nContent-Type: application/octet-stream\r\n"
     end
 
     test "generated boundaries are unique and header-safe" do
       %Request{headers: [{"content-type", ct1}]} =
-        Client.insert_request("bucket", %{name: "x"}, "BYTES")
+        Client.insert_request("bucket", "x", %{}, "BYTES")
 
       %Request{headers: [{"content-type", ct2}]} =
-        Client.insert_request("bucket", %{name: "x"}, "BYTES")
+        Client.insert_request("bucket", "x", %{}, "BYTES")
 
       assert ct1 != ct2
       assert ct1 =~ ~r/^multipart\/related; boundary=waffle_gcs_[0-9a-f]{32}$/
@@ -91,7 +87,7 @@ defmodule Waffle.Storage.Google.ClientTest do
             "imagé/png"
           ] do
         assert_raise ArgumentError, fn ->
-          Client.insert_request("bucket", %{name: "x", contentType: bad}, "BYTES")
+          Client.insert_request("bucket", "x", %{contentType: bad}, "BYTES")
         end
       end
     end

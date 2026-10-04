@@ -56,12 +56,11 @@ defmodule Waffle.Storage.Google.CloudStorage do
     metadata =
       definition
       |> optional_callback(:gcs_object_headers, [version, meta])
-      |> ensure_keyword_list()
+      |> Map.new(fn {key, value} -> {to_string(key), value} end)
       # GCS stores objects without a content type as application/octet-stream,
       # so infer one from the filename unless the definition's headers set it.
-      |> Keyword.put_new(:contentType, MIME.from_path(file.file_name))
-      |> Keyword.merge(acl_metadata)
-      |> Map.new()
+      |> Map.put_new("contentType", MIME.from_path(file.file_name))
+      |> Map.merge(acl_metadata)
 
     query =
       definition
@@ -112,11 +111,9 @@ defmodule Waffle.Storage.Google.CloudStorage do
   def bucket(definition, nil), do: Util.var(definition.bucket())
 
   def bucket(definition, meta) do
-    if Code.ensure_loaded?(definition) and function_exported?(definition, :bucket, 1) do
-      Util.var(definition.bucket(meta))
-    else
-      Util.var(definition.bucket())
-    end
+    definition
+    |> optional_callback(:bucket, [meta], &definition.bucket/0)
+    |> Util.var()
   end
 
   @doc """
@@ -151,14 +148,14 @@ defmodule Waffle.Storage.Google.CloudStorage do
   defp data({%{binary: nil, path: path}, _}), do: {:file, path}
   defp data({%{binary: data}, _}), do: {:binary, data}
 
-  @spec acl_params(term()) :: {Keyword.t(), Keyword.t()}
-  defp acl_params(nil), do: {[], []}
-  defp acl_params(:private), do: {[], []}
+  @spec acl_params(term()) :: {map(), Keyword.t()}
+  defp acl_params(nil), do: {%{}, []}
+  defp acl_params(:private), do: {%{}, []}
 
   defp acl_params(acl) when is_atom(acl) do
     case @predefined_acls do
       %{^acl => predefined} ->
-        {[], [predefinedAcl: predefined]}
+        {%{}, [predefinedAcl: predefined]}
 
       _ ->
         raise ArgumentError,
@@ -168,14 +165,14 @@ defmodule Waffle.Storage.Google.CloudStorage do
     end
   end
 
-  defp acl_params(acl) when is_binary(acl), do: {[], [predefinedAcl: acl]}
-  defp acl_params(acl) when is_list(acl), do: {[acl: acl], []}
+  defp acl_params(acl) when is_binary(acl), do: {%{}, [predefinedAcl: acl]}
+  defp acl_params(acl) when is_list(acl), do: {%{"acl" => acl}, []}
 
-  defp optional_callback(definition, fun, args) do
+  defp optional_callback(definition, fun, args, fallback \\ fn -> [] end) do
     if Code.ensure_loaded?(definition) and function_exported?(definition, fun, length(args)) do
       apply(definition, fun, args)
     else
-      []
+      fallback.()
     end
   end
 

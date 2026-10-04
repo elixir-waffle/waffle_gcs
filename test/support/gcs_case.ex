@@ -33,9 +33,6 @@ defmodule Waffle.GCSCase do
 
   setup_all do
     Application.ensure_all_started(:hackney)
-    # The URL probes below use :httpc; inets was previously started by the
-    # tesla dependency tree and must now be started explicitly.
-    {:ok, _} = Application.ensure_all_started([:inets, :ssl])
     Application.put_env(:waffle, :virtual_host, true)
     Application.put_env(:waffle, :bucket, {:system, "WAFFLE_BUCKET"})
     :ok

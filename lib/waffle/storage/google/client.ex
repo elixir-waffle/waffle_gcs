@@ -69,21 +69,18 @@ defmodule Waffle.Storage.Google.Client do
   Uploads an object in a single `multipart/related` request.
 
   `:metadata` is the object resource sent as the JSON part (`name` is set from
-  `name`); entries like `contentType` and `acl` go here. `:query` passes extra
+  `name`; keys may be atoms or strings); entries like `contentType` and `acl`
+  go here. `:query` passes extra
   query parameters (e.g. `predefinedAcl: "publicRead"`).
   """
   @spec insert(String.t(), String.t(), data(), keyword()) :: object_result()
   def insert(bucket, name, data, opts \\ []) do
     config = build_config(opts)
-
-    metadata =
-      opts
-      |> Keyword.get(:metadata, %{})
-      |> normalize_metadata()
-      |> Map.put("name", name)
+    metadata = Keyword.get(opts, :metadata, %{})
+    query = Keyword.get(opts, :query, [])
 
     bucket
-    |> insert_request(metadata, read_data(data), Keyword.get(opts, :query, []), config)
+    |> insert_request(name, metadata, read_data(data), query, config)
     |> execute(config, opts)
     |> map_object(config)
   end
@@ -155,9 +152,10 @@ defmodule Waffle.Storage.Google.Client do
   the metadata's `contentType` (as `google_gax` did) and is validated to be a
   single printable-ASCII line.
   """
-  @spec insert_request(String.t(), map(), iodata(), keyword(), config()) :: Request.t()
-  def insert_request(bucket, metadata, bytes, query \\ [], config \\ build_config()) do
-    metadata = normalize_metadata(metadata)
+  @spec insert_request(String.t(), String.t(), map(), iodata(), keyword(), config()) ::
+          Request.t()
+  def insert_request(bucket, name, metadata, bytes, query \\ [], config \\ build_config()) do
+    metadata = metadata |> normalize_metadata() |> Map.put("name", name)
     boundary = config.boundary || generate_boundary()
 
     body = [
