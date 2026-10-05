@@ -64,6 +64,8 @@ for step-by-step upgrade instructions.
 - `mime` becomes a direct dependency, `~> 2.0.6 or ~> 2.1` (previously
   transitive, resolving to 1.x)
   ([#45](https://github.com/elixir-waffle/waffle_gcs/pull/45))
+- Support waffle 2.0: `waffle` becomes `~> 1.1 or ~> 2.0` and `req`
+  `~> 0.6.1 or ~> 0.7` (waffle 2.0 requires req `~> 0.7`)
 - Update repository links to `elixir-waffle/waffle_gcs`
   ([#3](https://github.com/elixir-waffle/waffle_gcs/pull/3))
 

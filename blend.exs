@@ -14,6 +14,8 @@
 #   goth_1_2 - last pre-1.3 goth against otherwise-current deps; compiles
 #              Waffle.Storage.Google.Token.GothTokenFetcher, which the main
 #              lock (goth 1.4) never compiles.
+#   waffle_1 - newest waffle 1.x (main lock resolves 2.0); the hackney-era
+#              dependency tree.
 %{
   oldest: [
     {:waffle, "1.1.0"},
@@ -22,5 +24,6 @@
     {:mime, "2.0.6"},
     {:jason, "1.2.0"}
   ],
-  goth_1_2: [{:goth, "1.2.0"}]
+  goth_1_2: [{:goth, "1.2.0"}],
+  waffle_1: [{:waffle, "~> 1.1"}]
 }

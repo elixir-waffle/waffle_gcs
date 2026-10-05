@@ -174,6 +174,13 @@ field (fine-grained buckets only).
 If a definition relied on `@acl :public_read` being ignored, its uploads
 become public-readable on 0.3 — remove the ACL to keep them private.
 
+### Waffle 2.0
+
+waffle_gcs supports waffle `~> 1.1 or ~> 2.0`; nothing in this adapter changes
+between the two. If you upgrade waffle to 2.0 and store files from remote
+URLs, follow waffle's own guide: add `{:req, "~> 0.7"}` and set
+`config :waffle, http_client: Waffle.HTTPClient.Req`.
+
 ### Callback errors are no longer swallowed
 
 An exception raised *inside* your `gcs_object_headers/2` or

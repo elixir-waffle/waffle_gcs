@@ -25,15 +25,7 @@ defmodule Waffle.Storage.Google.CloudStorage.MixProject do
     |> Keyword.merge(maybe_lockfile_option())
   end
 
-  # hackney, transitive via waffle ~> 1.1; fixed only in hackney 4.x, which
-  # waffle's ~> 1.9 constraint can't reach. Reviewed and accepted — hackney
-  # is only used for waffle's own remote-file downloads, not by this adapter.
-  defp ignored_advisories do
-    ~w(
-      GHSA-gp9c-pm5m-5cxr GHSA-j9wq-vxxc-94wf GHSA-mp55-p8c9-rfw2
-      GHSA-pj7v-xfvx-wmjq
-    )
-  end
+  defp ignored_advisories, do: ~w()
 
   # Set by blend/premix.exs when BLEND is set; MIX_DEPS_PATH and
   # MIX_BUILD_ROOT are consumed by Mix itself.
@@ -93,10 +85,10 @@ defmodule Waffle.Storage.Google.CloudStorage.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
-      {:waffle, "~> 1.1"},
+      {:waffle, "~> 1.1 or ~> 2.0"},
       {:goth, "~> 1.1"},
       # 0.6.1 is the first release without GHSA-655f-mp8p-96gv.
-      {:req, "~> 0.6.1"},
+      {:req, "~> 0.6.1 or ~> 0.7"},
       # Direct dependency for content-type inference; the floor is req's.
       {:mime, "~> 2.0.6 or ~> 2.1"},
       # Default :json_codec for the GCS client (config :waffle_gcs, :json_codec).

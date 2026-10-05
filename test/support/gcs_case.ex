@@ -42,7 +42,7 @@ defmodule Waffle.GCSCase do
     # Derive a stable, collision-free basename from ExUnit's per-test tmp_dir
     # (e.g. ".../tmp/MyTest/the_test_name") so concurrently-run test objects never
     # clash in the bucket.
-    [_, unique_storage_dir] = :string.split(meta.tmp_dir, "/tmp/")
+    [_, unique_storage_dir] = :string.split(meta.tmp_dir, "/tmp/", :trailing)
     [mod_str, test_str] = Path.split(unique_storage_dir)
 
     unique_basename = mod_str <> "__" <> test_str
