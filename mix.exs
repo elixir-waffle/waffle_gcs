@@ -91,7 +91,7 @@ defmodule Waffle.Storage.Google.CloudStorage.MixProject do
       {:req, "~> 0.6.1 or ~> 0.7"},
       # Direct dependency for content-type inference; the floor is req's.
       {:mime, "~> 2.0.6 or ~> 2.1"},
-      # Default :json_codec for the GCS client (config :waffle_gcs, :json_codec).
+      # Default :json_library for the GCS client (config :waffle_gcs, :json_library).
       {:jason, "~> 1.2"},
       {:blend, "~> 0.5.0", only: :dev},
       {:plug, "~> 1.15", only: :test},

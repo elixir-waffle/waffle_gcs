@@ -24,9 +24,9 @@ defmodule Waffle.Storage.Google.Error do
   Builds an `Error` from a non-2xx response.
   """
   @spec from_response(Response.t(), module()) :: t()
-  def from_response(%Response{status: status, body: body} = response, json_codec) do
+  def from_response(%Response{status: status, body: body} = response, json_library) do
     reason =
-      case json_codec.decode(body) do
+      case json_library.decode(body) do
         {:ok, %{"error" => %{"message" => message}}} -> message
         {:ok, decoded} -> decoded
         {:error, _} -> body

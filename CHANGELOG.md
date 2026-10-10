@@ -20,8 +20,8 @@ for step-by-step upgrade instructions.
   `{:ok, %Waffle.Storage.Google.Object{}}` / `{:error, %Waffle.Storage.Google.Error{}}`
   (was `GoogleApi.Storage.V1.Model.Object` / `Tesla.Env`), `delete/3` returns
   `:ok` on success, and `CloudStorage.conn/0,1` is removed. The HTTP transport is a
-  behaviour and the JSON codec is configurable
-  (`config :waffle_gcs, :transport` / `:json_codec`). See
+  behaviour and the JSON library is configurable
+  (`config :waffle_gcs, :transport` / `:json_library`). See
   [UPGRADING.md](UPGRADING.md#new-gcs-client-result-types-and-removed-functions).
 - **Breaking:** S3-style atom ACLs (`:public_read`, ...) now map to GCS's
   `predefinedAcl` upload parameter instead of being silently dropped —
