@@ -3,6 +3,8 @@ defmodule Waffle.Storage.Google.UtilTest do
 
   alias Waffle.Storage.Google.Util
 
+  doctest Util
+
   @app_key :_test
   @app_test "app env test"
 

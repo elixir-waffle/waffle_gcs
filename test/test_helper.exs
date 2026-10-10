@@ -36,6 +36,12 @@
 #     when the test would fail today, so the suite stays green.
 # ─────────────────────────────────────────────────────────────────────────────
 
+# :httpc (inets) drives the URL probes in GCSCase. Mix prunes undeclared OTP
+# apps from the code path, so they must be re-added and started explicitly.
+Mix.ensure_application!(:inets)
+Mix.ensure_application!(:ssl)
+{:ok, _} = Application.ensure_all_started([:inets, :ssl])
+
 lib_version = Mix.Project.config() |> Keyword.fetch!(:version)
 
 # Intended behavior that isn't implemented yet; see the tag taxonomy above.

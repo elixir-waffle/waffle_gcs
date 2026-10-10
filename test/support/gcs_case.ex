@@ -42,7 +42,7 @@ defmodule Waffle.GCSCase do
     # Derive a stable, collision-free basename from ExUnit's per-test tmp_dir
     # (e.g. ".../tmp/MyTest/the_test_name") so concurrently-run test objects never
     # clash in the bucket.
-    [_, unique_storage_dir] = :string.split(meta.tmp_dir, "/tmp/")
+    [_, unique_storage_dir] = :string.split(meta.tmp_dir, "/tmp/", :trailing)
     [mod_str, test_str] = Path.split(unique_storage_dir)
 
     unique_basename = mod_str <> "__" <> test_str
@@ -154,19 +154,19 @@ defmodule Waffle.GCSCase do
   # test, or consistent bugs (like #25's double resolution) become invisible.
   defmacro assert_acls_public_reader(definition, rel_path) do
     quote bind_quoted: [definition: definition, rel_path: rel_path] do
-      alias Waffle.Storage.Google.CloudStorage
+      alias Waffle.Storage.Google.{Client, CloudStorage, Object}
 
-      {:ok, %GoogleApi.Storage.V1.Model.ObjectAccessControls{} = acls} =
-        GoogleApi.Storage.V1.Api.ObjectAccessControls.storage_object_access_controls_list(
-          CloudStorage.conn(),
+      {:ok, %Object{acl: acl}} =
+        Client.get(
           CloudStorage.bucket(definition),
-          "#{GCSTest.Run.storage_dir()}/#{rel_path}"
+          "#{GCSTest.Run.storage_dir()}/#{rel_path}",
+          query: [projection: "full"]
         )
 
       assert [
-               %{role: "OWNER", entity: service_account},
-               %{role: "READER", entity: "allUsers"}
-             ] = acls.items |> Enum.sort_by(& &1.role)
+               %{"role" => "OWNER", "entity" => service_account},
+               %{"role" => "READER", "entity" => "allUsers"}
+             ] = acl |> Enum.sort_by(& &1["role"])
 
       assert service_account =~ ".iam.gserviceaccount.com"
     end
