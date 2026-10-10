@@ -44,8 +44,6 @@ defmodule Cleanup do
     end
   end
 
-  def delete_objects(_bucket, _prefix, errors, %{items: []}), do: errors
-
   def delete_objects(bucket, prefix, errors, %{items: items, next_page_token: next}) do
     errors =
       Enum.reduce(items, errors, fn %{name: name}, errs ->
