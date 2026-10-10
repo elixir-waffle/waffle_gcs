@@ -20,11 +20,16 @@ defmodule Waffle.Storage.Google.CloudStorage do
     * an atom (`:public_read`, `:authenticated_read`, `:bucket_owner_read`,
       `:bucket_owner_full_control`, `:project_private`) — sent as the
       `predefinedAcl` query parameter
-    * `:private` or `nil` — nothing is sent and the bucket's default applies,
+    * `:private`, `nil`, or `[]` — nothing is sent and the bucket's default applies,
       which is required for buckets with uniform bucket-level access
     * a string — sent as `predefinedAcl` verbatim
-    * a list of ACL entries (maps) — sent as the object resource's `acl` field
-      (fine-grained buckets only)
+    * a list of ACL entries (maps or keyword lists) — sent as the object
+      resource's `acl` field (fine-grained buckets only)
+
+  A `predefinedAcl` returned by `gcs_optional_params/2` takes precedence over
+  the one derived from `acl/2`. Keys returned by `gcs_object_headers/2` and
+  `gcs_optional_params/2` may be atoms or strings; entries with a `nil` value
+  are dropped.
   """
 
   alias Waffle.Storage.Google.{Client, Error, Object, Util}
@@ -56,7 +61,7 @@ defmodule Waffle.Storage.Google.CloudStorage do
     metadata =
       definition
       |> optional_callback(:gcs_object_headers, [version, meta])
-      |> Map.new(fn {key, value} -> {to_string(key), value} end)
+      |> normalize_options()
       # GCS stores objects without a content type as application/octet-stream,
       # so infer one from the filename unless the definition's headers set it.
       |> Map.put_new("contentType", MIME.from_path(file.file_name))
@@ -65,8 +70,9 @@ defmodule Waffle.Storage.Google.CloudStorage do
     query =
       definition
       |> optional_callback(:gcs_optional_params, [version, meta])
-      |> ensure_keyword_list()
-      |> then(&Keyword.merge(acl_query, &1))
+      |> normalize_options()
+      |> then(&Map.merge(acl_query, &1))
+      |> Map.to_list()
 
     Client.insert(bucket(definition, meta), path, data(meta), metadata: metadata, query: query)
   end
@@ -148,14 +154,15 @@ defmodule Waffle.Storage.Google.CloudStorage do
   defp data({%{binary: nil, path: path}, _}), do: {:file, path}
   defp data({%{binary: data}, _}), do: {:binary, data}
 
-  @spec acl_params(term()) :: {map(), Keyword.t()}
-  defp acl_params(nil), do: {%{}, []}
-  defp acl_params(:private), do: {%{}, []}
+  @spec acl_params(term()) :: {map(), map()}
+  defp acl_params(nil), do: {%{}, %{}}
+  defp acl_params(:private), do: {%{}, %{}}
+  defp acl_params([]), do: {%{}, %{}}
 
   defp acl_params(acl) when is_atom(acl) do
     case @predefined_acls do
       %{^acl => predefined} ->
-        {%{}, [predefinedAcl: predefined]}
+        {%{}, %{"predefinedAcl" => predefined}}
 
       _ ->
         raise ArgumentError,
@@ -165,8 +172,21 @@ defmodule Waffle.Storage.Google.CloudStorage do
     end
   end
 
-  defp acl_params(acl) when is_binary(acl), do: {%{}, [predefinedAcl: acl]}
-  defp acl_params(acl) when is_list(acl), do: {%{"acl" => acl}, []}
+  defp acl_params(acl) when is_binary(acl), do: {%{}, %{"predefinedAcl" => acl}}
+
+  defp acl_params(acl) when is_list(acl) do
+    entries = if Keyword.keyword?(acl), do: [acl], else: acl
+    {%{"acl" => Enum.map(entries, &acl_entry/1)}, %{}}
+  end
+
+  defp acl_entry(entry) when is_list(entry), do: Map.new(entry)
+  defp acl_entry(entry), do: entry
+
+  defp normalize_options(options) do
+    options
+    |> Util.stringify_keys()
+    |> Map.reject(fn {_key, value} -> is_nil(value) end)
+  end
 
   defp optional_callback(definition, fun, args, fallback \\ fn -> [] end) do
     if Code.ensure_loaded?(definition) and function_exported?(definition, fun, length(args)) do
@@ -175,7 +195,4 @@ defmodule Waffle.Storage.Google.CloudStorage do
       fallback.()
     end
   end
-
-  defp ensure_keyword_list(list) when is_list(list), do: list
-  defp ensure_keyword_list(map) when is_map(map), do: Map.to_list(map)
 end

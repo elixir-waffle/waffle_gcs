@@ -159,7 +159,7 @@ defmodule Waffle.Storage.Google.Client do
   @spec insert_request(String.t(), String.t(), map(), iodata(), keyword(), config()) ::
           Request.t()
   def insert_request(bucket, name, metadata, bytes, query \\ [], config \\ build_config()) do
-    metadata = metadata |> normalize_metadata() |> Map.put("name", name)
+    metadata = metadata |> Util.stringify_keys() |> Map.put("name", name)
     boundary = config.boundary || generate_boundary()
 
     body = [
@@ -214,10 +214,6 @@ defmodule Waffle.Storage.Google.Client do
   end
 
   defp encode(segment), do: Util.encode_object_name(segment)
-
-  defp normalize_metadata(metadata) do
-    Map.new(metadata, fn {key, value} -> {to_string(key), value} end)
-  end
 
   defp read_data({:file, path}), do: File.read!(path)
   defp read_data({:binary, data}), do: data

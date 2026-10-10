@@ -49,6 +49,25 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
     def bucket, do: "offline-bucket"
   end
 
+  defmodule AclKeywordEntries do
+    use Waffle.Definition
+    @acl [[entity: "allUsers", role: "READER"]]
+    def bucket, do: "offline-bucket"
+  end
+
+  defmodule AclKeywordEntry do
+    use Waffle.Definition
+    @acl [entity: "allUsers", role: "READER"]
+    def bucket, do: "offline-bucket"
+  end
+
+  defmodule NilContentType do
+    use Waffle.Definition
+    def bucket, do: "offline-bucket"
+    def gcs_object_headers(_version, _meta), do: [contentType: nil, cacheControl: nil]
+    def gcs_optional_params(_version, _meta), do: [userProject: nil]
+  end
+
   defmodule AclUnknown do
     use Waffle.Definition
     @acl :public_read_write
@@ -60,6 +79,12 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
     @acl :public_read
     def bucket, do: "offline-bucket"
     def gcs_optional_params(_version, _meta), do: [predefinedAcl: "private", userProject: "p"]
+  end
+
+  defmodule StringKeyParams do
+    use Waffle.Definition
+    def bucket, do: "offline-bucket"
+    def gcs_optional_params(_version, _meta), do: %{"predefinedAcl" => "publicRead"}
   end
 
   defmodule StringKeyHeaders do
@@ -155,6 +180,10 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
       request
     end
 
+    defp query_param(%Request{query: query}, name) do
+      Enum.find_value(query, fn {key, value} -> to_string(key) == name && value end)
+    end
+
     defp metadata_json(%Request{body: body}) do
       [_, json] = Regex.run(~r/charset=UTF-8\r\n\r\n(.*?)\r\n--/s, IO.iodata_to_binary(body))
       Jason.decode!(json)
@@ -164,7 +193,7 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
       {:ok, _} = CloudStorage.put(AclAtom, :original, meta)
       request = captured_request()
 
-      assert request.query[:predefinedAcl] == "publicRead"
+      assert query_param(request, "predefinedAcl") == "publicRead"
       refute Map.has_key?(metadata_json(request), "acl")
     end
 
@@ -172,22 +201,48 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
       {:ok, _} = CloudStorage.put(AclDefault, :original, meta)
       request = captured_request()
 
-      refute Keyword.has_key?(request.query, :predefinedAcl)
+      refute query_param(request, "predefinedAcl")
       refute Map.has_key?(metadata_json(request), "acl")
     end
 
     test "a string ACL is sent as predefinedAcl verbatim", %{meta: meta} do
       {:ok, _} = CloudStorage.put(AclString, :original, meta)
 
-      assert captured_request().query[:predefinedAcl] == "bucketOwnerRead"
+      assert query_param(captured_request(), "predefinedAcl") == "bucketOwnerRead"
     end
 
     test "a list ACL goes to the object resource's acl field", %{meta: meta} do
       {:ok, _} = CloudStorage.put(AclList, :original, meta)
       request = captured_request()
 
-      refute Keyword.has_key?(request.query, :predefinedAcl)
+      refute query_param(request, "predefinedAcl")
       assert metadata_json(request)["acl"] == [%{"entity" => "allUsers", "role" => "READER"}]
+    end
+
+    test "keyword-list ACL entries are encoded as objects", %{meta: meta} do
+      {:ok, _} = CloudStorage.put(AclKeywordEntries, :original, meta)
+
+      assert metadata_json(captured_request())["acl"] == [
+               %{"entity" => "allUsers", "role" => "READER"}
+             ]
+    end
+
+    test "a single ACL entry written as a keyword list is one entry", %{meta: meta} do
+      {:ok, _} = CloudStorage.put(AclKeywordEntry, :original, meta)
+
+      assert metadata_json(captured_request())["acl"] == [
+               %{"entity" => "allUsers", "role" => "READER"}
+             ]
+    end
+
+    test "nil-valued headers and params are dropped, so contentType is still inferred",
+         %{meta: meta} do
+      {:ok, _} = CloudStorage.put(NilContentType, :original, meta)
+      request = captured_request()
+
+      assert metadata_json(request)["contentType"] == "image/png"
+      refute Map.has_key?(metadata_json(request), "cacheControl")
+      refute query_param(request, "userProject")
     end
 
     test "an unknown ACL atom raises", %{meta: meta} do
@@ -198,11 +253,17 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
 
     test "gcs_optional_params/2 override the ACL-derived predefinedAcl", %{meta: meta} do
       {:ok, _} = CloudStorage.put(AclOverriddenByParams, :original, meta)
-      query = captured_request().query
+      request = captured_request()
 
-      assert query[:predefinedAcl] == "private"
-      assert query[:userProject] == "p"
-      assert Enum.count(query, fn {key, _} -> key == :predefinedAcl end) == 1
+      assert query_param(request, "predefinedAcl") == "private"
+      assert query_param(request, "userProject") == "p"
+      assert Enum.count(request.query, fn {key, _} -> to_string(key) == "predefinedAcl" end) == 1
+    end
+
+    test "string-keyed gcs_optional_params/2 are accepted", %{meta: meta} do
+      {:ok, _} = CloudStorage.put(StringKeyParams, :original, meta)
+
+      assert query_param(captured_request(), "predefinedAcl") == "publicRead"
     end
 
     test "contentType is inferred from the filename when headers don't set it", %{meta: meta} do
