@@ -19,13 +19,10 @@ defmodule Waffle.Storage.Google.CloudStorage.MixProject do
       docs: docs(),
       package: package(),
       source_url: "https://github.com/elixir-waffle/waffle_gcs",
-      homepage_url: "https://github.com/elixir-waffle/waffle_gcs",
-      hex: [ignore_advisories: ignored_advisories()]
+      homepage_url: "https://github.com/elixir-waffle/waffle_gcs"
     ]
     |> Keyword.merge(maybe_lockfile_option())
   end
-
-  defp ignored_advisories, do: ~w()
 
   # Set by blend/premix.exs when BLEND is set; MIX_DEPS_PATH and
   # MIX_BUILD_ROOT are consumed by Mix itself.
@@ -47,7 +44,7 @@ defmodule Waffle.Storage.Google.CloudStorage.MixProject do
   defp elixirc_paths(_), do: ["lib"]
 
   # `mix test.unit` runs only the fast, offline unit tests (no GCS creds needed).
-  # `mix audit` checks retirements and advisories, honoring ignored_advisories/0.
+  # `mix audit` checks retirements and advisories.
   defp aliases do
     [
       "test.unit": ["test --exclude integration"],
