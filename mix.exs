@@ -103,6 +103,8 @@ defmodule Waffle.Storage.Google.CloudStorage.MixProject do
       # google_gax's compiled-in middleware stack. Pinned pending the client
       # rewrite (#39).
       {:tesla, "1.18.2"},
+      # Default :json_codec for the GCS client (config :waffle_gcs, :json_codec).
+      {:jason, "~> 1.2"},
       {:blend, "~> 0.5.0", only: :dev},
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
       {:dialyxir, "~> 1.0", only: [:dev], runtime: false}

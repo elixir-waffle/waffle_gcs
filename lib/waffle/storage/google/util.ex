@@ -54,4 +54,17 @@ defmodule Waffle.Storage.Google.Util do
   @spec prepend_slash(String.t()) :: String.t()
   def prepend_slash("/" <> _rest = path), do: path
   def prepend_slash(path), do: "/#{path}"
+
+  @doc """
+  Percent-encodes an object name for use as a single path segment in a GCS
+  API URL. Everything but unreserved characters is encoded — including `/`,
+  which the JSON API treats as part of the object name, not a path separator.
+
+  ## Examples
+
+      iex> Waffle.Storage.Google.Util.encode_object_name("uploads/img #1.png")
+      "uploads%2Fimg%20%231.png"
+  """
+  @spec encode_object_name(String.t()) :: String.t()
+  def encode_object_name(name), do: URI.encode(name, &URI.char_unreserved?/1)
 end
