@@ -13,12 +13,16 @@ defmodule Waffle.Storage.Google.Client do
   ```elixir
   config :waffle_gcs,
     transport: Waffle.Storage.Google.Transport.Req,
-    json_codec: Jason,
+    json_library: Jason,
     base_url: "https://storage.googleapis.com"
   ```
 
-  Every option can also be passed per call (`:transport`, `:json_codec`,
+  Every option can also be passed per call (`:transport`, `:json_library`,
   `:base_url`, `:scope`).
+
+  A custom `:json_library` must implement `encode!/1`, `decode!/1`, and
+  `decode/1` returning `{:ok, term} | {:error, term}` — `Jason` and Elixir
+  1.18's `JSON` both do.
 
   Map keys and query parameters use the GCS JSON API's own names verbatim
   (`contentType`, `predefinedAcl`, `pageToken`, ...) — they are wire-protocol
@@ -31,7 +35,7 @@ defmodule Waffle.Storage.Google.Client do
 
   @base_url "https://storage.googleapis.com"
   @full_control_scope "https://www.googleapis.com/auth/devstorage.full_control"
-  @default_json_codec Jason
+  @default_json_library Jason
   @default_transport Waffle.Storage.Google.Transport.Req
 
   @type data :: {:file, Path.t()} | {:binary, binary()}
@@ -40,7 +44,7 @@ defmodule Waffle.Storage.Google.Client do
   @typedoc "Per-call options resolved once against application config; see `build_config/1`."
   @type config :: %{
           transport: module(),
-          json_codec: module(),
+          json_library: module(),
           base_url: String.t(),
           scope: String.t(),
           boundary: String.t() | nil
@@ -54,7 +58,7 @@ defmodule Waffle.Storage.Google.Client do
   def build_config(opts \\ []) do
     %{
       transport: resolve(opts, :transport, @default_transport),
-      json_codec: resolve(opts, :json_codec, @default_json_codec),
+      json_library: resolve(opts, :json_library, @default_json_library),
       base_url: resolve(opts, :base_url, @base_url),
       scope: Keyword.get(opts, :scope, @full_control_scope),
       boundary: Keyword.get(opts, :boundary)
@@ -69,21 +73,18 @@ defmodule Waffle.Storage.Google.Client do
   Uploads an object in a single `multipart/related` request.
 
   `:metadata` is the object resource sent as the JSON part (`name` is set from
-  `name`); entries like `contentType` and `acl` go here. `:query` passes extra
+  `name`; keys may be atoms or strings); entries like `contentType` and `acl`
+  go here. `:query` passes extra
   query parameters (e.g. `predefinedAcl: "publicRead"`).
   """
   @spec insert(String.t(), String.t(), data(), keyword()) :: object_result()
   def insert(bucket, name, data, opts \\ []) do
     config = build_config(opts)
-
-    metadata =
-      opts
-      |> Keyword.get(:metadata, %{})
-      |> normalize_metadata()
-      |> Map.put("name", name)
+    metadata = Keyword.get(opts, :metadata, %{})
+    query = Keyword.get(opts, :query, [])
 
     bucket
-    |> insert_request(metadata, read_data(data), Keyword.get(opts, :query, []), config)
+    |> insert_request(name, metadata, read_data(data), query, config)
     |> execute(config, opts)
     |> map_object(config)
   end
@@ -134,7 +135,7 @@ defmodule Waffle.Storage.Google.Client do
     |> execute(config, opts)
     |> case do
       {:ok, %Response{status: status, body: body}} when status in 200..299 ->
-        decoded = config.json_codec.decode!(body)
+        decoded = config.json_library.decode!(body)
 
         {:ok,
          %{
@@ -155,16 +156,17 @@ defmodule Waffle.Storage.Google.Client do
   the metadata's `contentType` (as `google_gax` did) and is validated to be a
   single printable-ASCII line.
   """
-  @spec insert_request(String.t(), map(), iodata(), keyword(), config()) :: Request.t()
-  def insert_request(bucket, metadata, bytes, query \\ [], config \\ build_config()) do
-    metadata = normalize_metadata(metadata)
+  @spec insert_request(String.t(), String.t(), map(), iodata(), keyword(), config()) ::
+          Request.t()
+  def insert_request(bucket, name, metadata, bytes, query \\ [], config \\ build_config()) do
+    metadata = metadata |> Util.stringify_keys() |> Map.put("name", name)
     boundary = config.boundary || generate_boundary()
 
     body = [
       "--",
       boundary,
       "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n",
-      config.json_codec.encode!(metadata),
+      config.json_library.encode!(metadata),
       "\r\n--",
       boundary,
       "\r\nContent-Type: ",
@@ -213,10 +215,6 @@ defmodule Waffle.Storage.Google.Client do
 
   defp encode(segment), do: Util.encode_object_name(segment)
 
-  defp normalize_metadata(metadata) do
-    Map.new(metadata, fn {key, value} -> {to_string(key), value} end)
-  end
-
   defp read_data({:file, path}), do: File.read!(path)
   defp read_data({:binary, data}), do: data
 
@@ -256,13 +254,13 @@ defmodule Waffle.Storage.Google.Client do
 
   defp map_object({:ok, %Response{status: status, body: body} = response}, config)
        when status in 200..299 do
-    {:ok, body |> config.json_codec.decode!() |> Object.from_map(response)}
+    {:ok, body |> config.json_library.decode!() |> Object.from_map(response)}
   end
 
   defp map_object(other, config), do: {:error, to_error(other, config)}
 
   defp to_error({:ok, %Response{} = response}, config) do
-    Error.from_response(response, config.json_codec)
+    Error.from_response(response, config.json_library)
   end
 
   defp to_error({:error, reason}, _config) do
