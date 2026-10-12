@@ -49,15 +49,15 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
     def bucket, do: "offline-bucket"
   end
 
-  defmodule AclKeywordEntries do
+  defmodule AclSingleMap do
     use Waffle.Definition
-    @acl [[entity: "allUsers", role: "READER"]]
+    @acl %{entity: "allUsers", role: "READER"}
     def bucket, do: "offline-bucket"
   end
 
-  defmodule AclKeywordEntry do
+  defmodule AclKeywordEntries do
     use Waffle.Definition
-    @acl [entity: "allUsers", role: "READER"]
+    @acl [[entity: "allUsers", role: "READER"]]
     def bucket, do: "offline-bucket"
   end
 
@@ -219,20 +219,18 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
       assert metadata_json(request)["acl"] == [%{"entity" => "allUsers", "role" => "READER"}]
     end
 
-    test "keyword-list ACL entries are encoded as objects", %{meta: meta} do
-      {:ok, _} = CloudStorage.put(AclKeywordEntries, :original, meta)
+    test "a single ACL entry map is shorthand for a one-entry list", %{meta: meta} do
+      {:ok, _} = CloudStorage.put(AclSingleMap, :original, meta)
 
       assert metadata_json(captured_request())["acl"] == [
                %{"entity" => "allUsers", "role" => "READER"}
              ]
     end
 
-    test "a single ACL entry written as a keyword list is one entry", %{meta: meta} do
-      {:ok, _} = CloudStorage.put(AclKeywordEntry, :original, meta)
-
-      assert metadata_json(captured_request())["acl"] == [
-               %{"entity" => "allUsers", "role" => "READER"}
-             ]
+    test "keyword-list ACL entries raise", %{meta: meta} do
+      assert_raise ArgumentError, ~r/acl\/2 must return ACL entry maps/, fn ->
+        CloudStorage.put(AclKeywordEntries, :original, meta)
+      end
     end
 
     test "nil-valued headers and params are dropped, so contentType is still inferred",

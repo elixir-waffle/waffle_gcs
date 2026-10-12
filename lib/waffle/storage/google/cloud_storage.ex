@@ -23,8 +23,9 @@ defmodule Waffle.Storage.Google.CloudStorage do
     * `:private`, `nil`, or `[]` — nothing is sent and the bucket's default applies,
       which is required for buckets with uniform bucket-level access
     * a string — sent as `predefinedAcl` verbatim
-    * a list of ACL entries (maps or keyword lists) — sent as the object
-      resource's `acl` field (fine-grained buckets only)
+    * an ACL entry map (`%{entity: "allUsers", role: "READER"}`) or a list of
+      them — sent as the object resource's `acl` field (fine-grained buckets
+      only); a single map is shorthand for a one-entry list
 
   A `predefinedAcl` returned by `gcs_optional_params/2` takes precedence over
   the one derived from `acl/2`. Keys returned by `gcs_object_headers/2` and
@@ -174,13 +175,17 @@ defmodule Waffle.Storage.Google.CloudStorage do
 
   defp acl_params(acl) when is_binary(acl), do: {%{}, %{"predefinedAcl" => acl}}
 
-  defp acl_params(acl) when is_list(acl) do
-    entries = if Keyword.keyword?(acl), do: [acl], else: acl
-    {%{"acl" => Enum.map(entries, &acl_entry/1)}, %{}}
-  end
+  defp acl_params(%{} = entry), do: acl_params([entry])
 
-  defp acl_entry(entry) when is_list(entry), do: Map.new(entry)
-  defp acl_entry(entry), do: entry
+  defp acl_params(entries) when is_list(entries) do
+    unless Enum.all?(entries, &is_map/1) do
+      raise ArgumentError,
+            "acl/2 must return ACL entry maps (e.g. %{entity: \"allUsers\", role: \"READER\"}), " <>
+              "got: #{inspect(entries)}"
+    end
+
+    {%{"acl" => entries}, %{}}
+  end
 
   defp normalize_options(options) do
     options
