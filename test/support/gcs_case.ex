@@ -32,7 +32,6 @@ defmodule Waffle.GCSCase do
   end
 
   setup_all do
-    Application.ensure_all_started(:hackney)
     Application.put_env(:waffle, :virtual_host, true)
     Application.put_env(:waffle, :bucket, {:system, "WAFFLE_BUCKET"})
     :ok

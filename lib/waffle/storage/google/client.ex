@@ -20,9 +20,9 @@ defmodule Waffle.Storage.Google.Client do
   Every option can also be passed per call (`:transport`, `:json_library`,
   `:base_url`, `:scope`).
 
-  A custom `:json_library` must implement `encode!/1`, `decode!/1`, and
-  `decode/1` returning `{:ok, term} | {:error, term}` — `Jason` and Elixir
-  1.18's `JSON` both do.
+  A custom `:json_library` must implement `encode!/1` and `decode/1`
+  (returning `{:ok, term} | {:error, term}`) — `Jason` and Elixir 1.18's
+  `JSON` both do.
 
   Map keys and query parameters use the GCS JSON API's own names verbatim
   (`contentType`, `predefinedAcl`, `pageToken`, ...) — they are wire-protocol
@@ -134,14 +134,14 @@ defmodule Waffle.Storage.Google.Client do
     |> list_request(Keyword.get(opts, :query, []), config)
     |> execute(config, opts)
     |> case do
-      {:ok, %Response{status: status, body: body}} when status in 200..299 ->
-        decoded = config.json_library.decode!(body)
-
-        {:ok,
-         %{
-           items: decoded |> Map.get("items", []) |> Enum.map(&Object.from_map/1),
-           next_page_token: decoded["nextPageToken"]
-         }}
+      {:ok, %Response{status: status} = response} when status in 200..299 ->
+        with {:ok, decoded} <- decode(response, config) do
+          {:ok,
+           %{
+             items: decoded |> Map.get("items", []) |> Enum.map(&Object.from_map/1),
+             next_page_token: decoded["nextPageToken"]
+           }}
+        end
 
       other ->
         {:error, to_error(other, config)}
@@ -252,12 +252,21 @@ defmodule Waffle.Storage.Google.Client do
     %{request | headers: [{"authorization", "Bearer " <> token} | request.headers]}
   end
 
-  defp map_object({:ok, %Response{status: status, body: body} = response}, config)
+  defp map_object({:ok, %Response{status: status} = response}, config)
        when status in 200..299 do
-    {:ok, body |> config.json_library.decode!() |> Object.from_map(response)}
+    with {:ok, decoded} <- decode(response, config) do
+      {:ok, Object.from_map(decoded, response)}
+    end
   end
 
   defp map_object(other, config), do: {:error, to_error(other, config)}
+
+  defp decode(%Response{body: body} = response, config) do
+    case config.json_library.decode(body) do
+      {:ok, decoded} when is_map(decoded) -> {:ok, decoded}
+      _ -> {:error, Error.from_response(response, config.json_library)}
+    end
+  end
 
   defp to_error({:ok, %Response{} = response}, config) do
     Error.from_response(response, config.json_library)

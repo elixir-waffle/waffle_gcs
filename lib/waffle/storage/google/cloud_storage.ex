@@ -65,7 +65,7 @@ defmodule Waffle.Storage.Google.CloudStorage do
       |> normalize_options()
       # GCS stores objects without a content type as application/octet-stream,
       # so infer one from the filename unless the definition's headers set it.
-      |> Map.put_new("contentType", MIME.from_path(file.file_name))
+      |> put_content_type(MIME.from_path(file.file_name))
       |> Map.merge(acl_metadata)
 
     query =
@@ -169,7 +169,7 @@ defmodule Waffle.Storage.Google.CloudStorage do
         raise ArgumentError,
               "unsupported ACL #{inspect(acl)}; supported atoms: " <>
                 "#{inspect([:private | Map.keys(@predefined_acls)])}, " <>
-                "a predefinedAcl string, or a list of ACL entries"
+                "a predefinedAcl string, an ACL entry map, or a list of them"
     end
   end
 
@@ -185,6 +185,13 @@ defmodule Waffle.Storage.Google.CloudStorage do
     end
 
     {%{"acl" => entries}, %{}}
+  end
+
+  defp put_content_type(metadata, inferred) do
+    Map.update(metadata, "contentType", inferred, fn
+      "" -> inferred
+      type -> type
+    end)
   end
 
   defp normalize_options(options) do

@@ -6,25 +6,9 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
   use ExUnit.Case, async: false
 
   alias Waffle.Storage.Google.{CloudStorage, Error, Object}
-  alias Waffle.Storage.Google.Client.{Request, Response}
+  alias Waffle.Storage.Google.Client.Request
 
   @file_path "test/support/image.png"
-
-  defmodule StubFetcher do
-    @behaviour Waffle.Storage.Google.Token.Fetcher
-    @impl true
-    def get_token(_scope), do: "stub-token"
-  end
-
-  defmodule CaptureTransport do
-    @behaviour Waffle.Storage.Google.Transport
-
-    @impl true
-    def execute(request, _opts) do
-      send(self(), {:request, request})
-      {:ok, %Response{status: 200, headers: [], body: ~s({"name": "captured"})}}
-    end
-  end
 
   defmodule AclAtom do
     use Waffle.Definition
@@ -68,6 +52,12 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
     def gcs_optional_params(_version, _meta), do: [userProject: nil]
   end
 
+  defmodule EmptyContentType do
+    use Waffle.Definition
+    def bucket, do: "offline-bucket"
+    def gcs_object_headers(_version, _meta), do: [contentType: ""]
+  end
+
   defmodule AclUnknown do
     use Waffle.Definition
     @acl :public_read_write
@@ -106,7 +96,6 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
   end
 
   setup_all do
-    Application.ensure_all_started(:hackney)
     Application.put_env(:waffle, :virtual_host, true)
     Application.put_env(:waffle, :bucket, {:system, "WAFFLE_BUCKET"})
     :ok
@@ -163,13 +152,14 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
 
   describe "put/3 request assembly" do
     setup do
-      original = Application.fetch_env!(:waffle, :token_fetcher)
-      Application.put_env(:waffle, :token_fetcher, StubFetcher)
-      Application.put_env(:waffle_gcs, :transport, CaptureTransport)
+      original_fetcher = Application.fetch_env!(:waffle, :token_fetcher)
+      original_transport = Application.get_env(:waffle_gcs, :transport)
+      Application.put_env(:waffle, :token_fetcher, GCSTest.StubFetcher)
+      Application.put_env(:waffle_gcs, :transport, GCSTest.StubTransport)
 
       on_exit(fn ->
-        Application.put_env(:waffle, :token_fetcher, original)
-        Application.delete_env(:waffle_gcs, :transport)
+        Application.put_env(:waffle, :token_fetcher, original_fetcher)
+        GCSTest.Env.restore(:waffle_gcs, :transport, original_transport)
       end)
 
       %{meta: {%Waffle.File{file_name: "img.png", binary: "BYTES"}, nil}}
@@ -241,6 +231,12 @@ defmodule Waffle.Storage.Google.CloudStorageTest do
       assert metadata_json(request)["contentType"] == "image/png"
       refute Map.has_key?(metadata_json(request), "cacheControl")
       refute query_param(request, "userProject")
+    end
+
+    test "an empty-string contentType is inferred like a missing one", %{meta: meta} do
+      {:ok, _} = CloudStorage.put(EmptyContentType, :original, meta)
+
+      assert metadata_json(captured_request())["contentType"] == "image/png"
     end
 
     test "an unknown ACL atom raises", %{meta: meta} do

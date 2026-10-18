@@ -4,27 +4,11 @@ defmodule Waffle.Storage.Google.ClientTest do
   alias Waffle.Storage.Google.{Client, Error, Object}
   alias Waffle.Storage.Google.Client.{Request, Response}
 
-  defmodule StubFetcher do
-    @behaviour Waffle.Storage.Google.Token.Fetcher
-    @impl true
-    def get_token(_scope), do: "stub-token"
-  end
-
-  defmodule StubTransport do
-    @behaviour Waffle.Storage.Google.Transport
-
-    @impl true
-    def execute(request, opts) do
-      send(self(), {:request, request})
-      Keyword.fetch!(opts, :respond).(request)
-    end
-  end
-
-  @opts [transport: StubTransport]
+  @opts [transport: GCSTest.StubTransport]
 
   setup do
     original = Application.fetch_env!(:waffle, :token_fetcher)
-    Application.put_env(:waffle, :token_fetcher, StubFetcher)
+    Application.put_env(:waffle, :token_fetcher, GCSTest.StubFetcher)
     on_exit(fn -> Application.put_env(:waffle, :token_fetcher, original) end)
   end
 
@@ -171,6 +155,16 @@ defmodule Waffle.Storage.Google.ClientTest do
                Client.insert("bucket", "x", {:binary, ""}, @opts ++ [respond: respond(403, body)])
     end
 
+    test "a 2xx response without a JSON object body is an error, not a raise" do
+      assert {:error, %Error{status: 200, reason: "<html>proxy login</html>"}} =
+               Client.insert(
+                 "bucket",
+                 "x",
+                 {:binary, ""},
+                 @opts ++ [respond: respond(200, "<html>proxy login</html>")]
+               )
+    end
+
     test "wraps connection-level failures with a nil status and response" do
       assert {:error, %Error{status: nil, reason: :timeout, response: nil}} =
                Client.insert(
@@ -215,6 +209,11 @@ defmodule Waffle.Storage.Google.ClientTest do
                 next_page_token: "tok"
               }} =
                Client.list("bucket", @opts ++ [respond: respond(200, body)])
+    end
+
+    test "a 2xx response without a JSON object body is an error" do
+      assert {:error, %Error{status: 200, reason: ""}} =
+               Client.list("bucket", @opts ++ [respond: respond(200, "")])
     end
 
     test "an empty bucket maps to no items and no token" do

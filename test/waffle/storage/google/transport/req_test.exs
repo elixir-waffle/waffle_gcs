@@ -5,9 +5,10 @@ defmodule Waffle.Storage.Google.Transport.ReqTest do
   alias Waffle.Storage.Google.Transport
 
   setup do
+    original = Application.get_env(:waffle_gcs, Transport.Req)
     Application.put_env(:waffle_gcs, Transport.Req, req_options: [plug: {Req.Test, __MODULE__}])
 
-    on_exit(fn -> Application.delete_env(:waffle_gcs, Transport.Req) end)
+    on_exit(fn -> GCSTest.Env.restore(:waffle_gcs, Transport.Req, original) end)
   end
 
   test "translates the request and normalizes the response" do
