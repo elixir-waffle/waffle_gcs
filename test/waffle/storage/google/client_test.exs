@@ -4,29 +4,11 @@ defmodule Waffle.Storage.Google.ClientTest do
   alias Waffle.Storage.Google.{Client, Error, Object}
   alias Waffle.Storage.Google.Client.{Request, Response}
 
-  doctest Waffle.Storage.Google.Util
-
-  defmodule StubFetcher do
-    @behaviour Waffle.Storage.Google.Token.Fetcher
-    @impl true
-    def get_token(_scope), do: "stub-token"
-  end
-
-  defmodule StubTransport do
-    @behaviour Waffle.Storage.Google.Transport
-
-    @impl true
-    def execute(request, opts) do
-      send(self(), {:request, request})
-      Keyword.fetch!(opts, :respond).(request)
-    end
-  end
-
-  @opts [transport: StubTransport]
+  @opts [transport: GCSTest.StubTransport]
 
   setup do
     original = Application.fetch_env!(:waffle, :token_fetcher)
-    Application.put_env(:waffle, :token_fetcher, StubFetcher)
+    Application.put_env(:waffle, :token_fetcher, GCSTest.StubFetcher)
     on_exit(fn -> Application.put_env(:waffle, :token_fetcher, original) end)
   end
 
@@ -36,12 +18,11 @@ defmodule Waffle.Storage.Google.ClientTest do
 
   describe "insert_request/5" do
     test "assembles the multipart/related body with constant framing" do
-      metadata = %{name: "uploads/img.png", contentType: "image/png"}
-
       request =
         Client.insert_request(
           "bucket",
-          metadata,
+          "uploads/img.png",
+          %{contentType: "image/png"},
           "BYTES",
           [predefinedAcl: "publicRead"],
           Client.build_config(boundary: "BOUNDARY")
@@ -65,18 +46,17 @@ defmodule Waffle.Storage.Google.ClientTest do
     end
 
     test "media part content type defaults to application/octet-stream" do
-      request =
-        Client.insert_request("bucket", %{name: "x"}, "BYTES", [], Client.build_config())
+      request = Client.insert_request("bucket", "x", %{}, "BYTES", [], Client.build_config())
 
       assert IO.iodata_to_binary(request.body) =~ "\r\nContent-Type: application/octet-stream\r\n"
     end
 
     test "generated boundaries are unique and header-safe" do
       %Request{headers: [{"content-type", ct1}]} =
-        Client.insert_request("bucket", %{name: "x"}, "BYTES")
+        Client.insert_request("bucket", "x", %{}, "BYTES")
 
       %Request{headers: [{"content-type", ct2}]} =
-        Client.insert_request("bucket", %{name: "x"}, "BYTES")
+        Client.insert_request("bucket", "x", %{}, "BYTES")
 
       assert ct1 != ct2
       assert ct1 =~ ~r/^multipart\/related; boundary=waffle_gcs_[0-9a-f]{32}$/
@@ -91,7 +71,7 @@ defmodule Waffle.Storage.Google.ClientTest do
             "imagé/png"
           ] do
         assert_raise ArgumentError, fn ->
-          Client.insert_request("bucket", %{name: "x", contentType: bad}, "BYTES")
+          Client.insert_request("bucket", "x", %{contentType: bad}, "BYTES")
         end
       end
     end
@@ -175,6 +155,16 @@ defmodule Waffle.Storage.Google.ClientTest do
                Client.insert("bucket", "x", {:binary, ""}, @opts ++ [respond: respond(403, body)])
     end
 
+    test "a 2xx response without a JSON object body is an error, not a raise" do
+      assert {:error, %Error{status: 200, reason: "<html>proxy login</html>"}} =
+               Client.insert(
+                 "bucket",
+                 "x",
+                 {:binary, ""},
+                 @opts ++ [respond: respond(200, "<html>proxy login</html>")]
+               )
+    end
+
     test "wraps connection-level failures with a nil status and response" do
       assert {:error, %Error{status: nil, reason: :timeout, response: nil}} =
                Client.insert(
@@ -219,6 +209,11 @@ defmodule Waffle.Storage.Google.ClientTest do
                 next_page_token: "tok"
               }} =
                Client.list("bucket", @opts ++ [respond: respond(200, body)])
+    end
+
+    test "a 2xx response without a JSON object body is an error" do
+      assert {:error, %Error{status: 200, reason: ""}} =
+               Client.list("bucket", @opts ++ [respond: respond(200, "")])
     end
 
     test "an empty bucket maps to no items and no token" do

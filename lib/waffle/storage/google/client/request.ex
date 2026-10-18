@@ -9,7 +9,7 @@ defmodule Waffle.Storage.Google.Client.Request do
   @type t :: %__MODULE__{
           method: :get | :post | :put | :delete,
           url: String.t(),
-          query: [{atom() | String.t(), String.t()}],
+          query: [{atom() | String.t(), term()}],
           headers: [{String.t(), String.t()}],
           body: iodata() | nil
         }
