@@ -155,6 +155,9 @@ you pattern-match adapter results or dependency types, update:
   plus the transport response under `response`.
 - `CloudStorage.delete/3` returns `:ok` (was `{:ok, %Tesla.Env{status: 204}}`)
   or `{:error, %Waffle.Storage.Google.Error{}}`.
+- Consequently, the error list from `definition.store/1` holds
+  `%Waffle.Storage.Google.Error{}` structs (was `%Tesla.Env{}`): a match like
+  `{:error, [%Tesla.Env{status: 403} | _]}` no longer matches.
 - `CloudStorage.conn/0,1` is removed — there is no Tesla client to build.
   The HTTP layer is a behaviour; see `Waffle.Storage.Google.Transport`.
 - If your app depended on `tesla`, `poison`, or the `GoogleApi.*` modules
@@ -166,10 +169,17 @@ you pattern-match adapter results or dependency types, update:
 Atom ACLs are mapped to GCS's `predefinedAcl` upload parameter instead of
 being silently dropped: `@acl :public_read` now actually makes objects
 public-readable (previously it uploaded a private object with no error).
-`:private`/`nil` send nothing so the bucket default applies — required for
-buckets with uniform bucket-level access. Unrecognized atoms raise
-`ArgumentError`. A list ACL is still sent as the object resource's `acl`
-field (fine-grained buckets only).
+`:private`, `nil`, and `[]` send nothing so the bucket default applies —
+required for buckets with uniform bucket-level access. Unrecognized atoms
+raise `ArgumentError`. A list of ACL entry maps is still sent as the object
+resource's `acl` field (fine-grained buckets only), and a single entry map is
+accepted as shorthand for a one-entry list.
+
+Previously the value of `acl/2` always overwrote an `acl` key returned from
+`gcs_object_headers/2`. Now a header-supplied `acl` is sent when `acl/2`
+yields nothing (`:private`/`nil`/`[]`); a list from `acl/2` still takes
+precedence. If a definition returned ACL entries from `gcs_object_headers/2`
+to work around the old bug, those entries are now honored.
 
 If a definition relied on `@acl :public_read` being ignored, its uploads
 become public-readable on 0.3 — remove the ACL to keep them private.
