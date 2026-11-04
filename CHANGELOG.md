@@ -52,6 +52,18 @@ for step-by-step upgrade instructions.
   [#46](https://github.com/elixir-waffle/waffle_gcs/pull/46)). **Behavior
   change** if a definition already overrides `bucket/1`: it was previously
   ignored by this adapter. See [UPGRADING.md](UPGRADING.md#bucket1-overrides-are-now-honored).
+- `asset_host` is now resolved like the S3 adapter does, with a per-call
+  option in front: `definition.url(file, asset_host: "cdn.example.com")`,
+  then the definition's `asset_host/0` callback, then
+  `config :waffle, asset_host:`. `{:system, "VAR"}` is read from the
+  environment, `false` selects the GCS endpoint, and a value with a scheme
+  (`"https://cdn.example.com"`) is used as-is
+  ([#28](https://github.com/elixir-waffle/waffle_gcs/issues/28)). Previously
+  only the app config worked; the per-call option and the callback were
+  silently ignored. **Behavior change** if a definition already defines
+  `asset_host/0`. `Waffle.Storage.Google.UrlV2.endpoint/1` is replaced by
+  `asset_host/2`. See
+  [UPGRADING.md](UPGRADING.md#asset_host0-overrides-are-now-honored).
 - Objects uploaded without an explicit content type in `gcs_object_headers/2`
   now get a `contentType` inferred from the filename via `MIME.from_path/1`
   instead of being stored as `application/octet-stream`

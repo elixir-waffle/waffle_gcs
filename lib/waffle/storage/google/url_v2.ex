@@ -47,13 +47,26 @@ defmodule Waffle.Storage.Google.UrlV2 do
   def signed?(opts \\ []), do: Util.option(opts, :signed, false)
 
   @doc """
-  Returns the remote asset host. The config key is assumed to be `:asset_host`.
+  Returns the asset host URLs are served from, or `nil` for the GCS endpoint.
+
+  Resolution order matches waffle's S3 adapter, with a per-call option in
+  front: the `:asset_host` option, then the definition's `asset_host/0`
+  callback (whose waffle default reads `config :waffle, asset_host:`). A
+  `{:system, "VAR"}` value is read from the environment; `false` selects the
+  GCS endpoint. A host without a scheme is served over `https`.
   """
-  @spec endpoint(Keyword.t()) :: String.t()
-  def endpoint(opts \\ []) do
-    opts
-    |> Util.option(:asset_host, @endpoint)
-    |> Util.var()
+  @spec asset_host(Types.definition(), Keyword.t()) :: String.t() | nil
+  def asset_host(definition, opts \\ []) do
+    host =
+      case Keyword.get(opts, :asset_host) do
+        nil -> definition.asset_host()
+        host -> host
+      end
+
+    case Util.var(host) do
+      false -> nil
+      host -> host
+    end
   end
 
   @impl Waffle.Storage.Google.Url
@@ -63,19 +76,27 @@ defmodule Waffle.Storage.Google.UrlV2 do
     if signed?(options) do
       build_signed_url(definition, meta, path, options)
     else
-      build_url(definition, meta, path)
+      build_url(definition, meta, path, options)
     end
   end
 
-  @spec build_url(Types.definition(), Types.meta(), String.t()) :: String.t()
-  defp build_url(definition, meta, path) do
-    %URI{
-      host: endpoint(),
-      path: build_path(definition, meta, path),
-      scheme: "https"
-    }
-    |> URI.to_string()
+  @spec build_url(Types.definition(), Types.meta(), String.t(), Keyword.t()) :: String.t()
+  defp build_url(definition, meta, path, options) do
+    base_url(definition, options) <> build_path(definition, meta, path, options)
   end
+
+  @spec base_url(Types.definition(), Keyword.t()) :: String.t()
+  defp base_url(definition, options) do
+    case asset_host(definition, options) do
+      nil -> "https://#{@endpoint}"
+      host -> host |> with_scheme() |> String.trim_trailing("/")
+    end
+  end
+
+  @spec with_scheme(String.t()) :: String.t()
+  defp with_scheme("http://" <> _ = url), do: url
+  defp with_scheme("https://" <> _ = url), do: url
+  defp with_scheme(host), do: "https://" <> host
 
   @spec build_signed_url(Types.definition(), Types.meta(), String.t(), Keyword.t()) :: String.t()
   defp build_signed_url(definition, meta, path, options) do
@@ -85,22 +106,21 @@ defmodule Waffle.Storage.Google.UrlV2 do
 
     signature =
       definition
-      |> build_path(meta, path)
+      |> build_path(meta, path, options)
       |> canonical_request(expiration)
       |> sign_request()
 
-    base_url = build_url(definition, meta, path)
+    base_url = build_url(definition, meta, path, options)
 
     "#{base_url}?GoogleAccessId=#{client_id}&Expires=#{expiration}&Signature=#{signature}"
   end
 
-  @spec build_path(Types.definition(), Types.meta(), String.t()) :: String.t()
-  defp build_path(definition, meta, path) do
+  @spec build_path(Types.definition(), Types.meta(), String.t(), Keyword.t()) :: String.t()
+  defp build_path(definition, meta, path, options) do
     path =
-      if endpoint() != @endpoint do
-        path
-      else
-        bucket_and_path(definition, meta, path)
+      case asset_host(definition, options) do
+        nil -> bucket_and_path(definition, meta, path)
+        _host -> path
       end
 
     path

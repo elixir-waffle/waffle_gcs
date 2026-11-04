@@ -3,6 +3,8 @@ defmodule Waffle.Storage.Google.UrlV2Test do
   # tests swap the (global) legacy Goth.Config identity.
   use ExUnit.Case, async: false
 
+  import Waffle.GCSCase, only: [with_env: 4]
+
   alias Waffle.Storage.Google.UrlV2
 
   @bucket "url-v2-test-bucket"
@@ -32,21 +34,80 @@ defmodule Waffle.Storage.Google.UrlV2Test do
     end
   end
 
-  describe "endpoint/1" do
-    test "returns the option value when provided" do
-      assert "test.com" == UrlV2.endpoint(asset_host: "test.com")
+  describe "asset_host/2" do
+    test "per-call option wins over the definition callback and app config" do
+      with_env(:waffle, :asset_host, "app-cdn.example.com", fn ->
+        assert "call-cdn.example.com" ==
+                 UrlV2.asset_host(GCSTest.WithAssetHost, asset_host: "call-cdn.example.com")
+      end)
     end
 
-    test "returns the application config as a back-up" do
-      Application.put_env(:waffle, :asset_host, "test.com")
-      result = UrlV2.endpoint()
-      Application.delete_env(:waffle, :asset_host)
-
-      assert "test.com" == result
+    test "definition callback wins over app config" do
+      with_env(:waffle, :asset_host, "app-cdn.example.com", fn ->
+        assert "cdn.example.com" == UrlV2.asset_host(GCSTest.WithAssetHost)
+      end)
     end
 
-    test "returns default endpoint" do
-      assert "storage.googleapis.com" == UrlV2.endpoint()
+    test "app config is read through the definition's default callback" do
+      with_env(:waffle, :asset_host, "app-cdn.example.com", fn ->
+        assert "app-cdn.example.com" == UrlV2.asset_host(GCSTest.PublicUpload)
+      end)
+    end
+
+    test "resolves {:system, var} from the environment" do
+      System.put_env("WAFFLE_TEST_ASSET_HOST", "https://env-cdn.example.com")
+      on_exit(fn -> System.delete_env("WAFFLE_TEST_ASSET_HOST") end)
+
+      assert "https://env-cdn.example.com" ==
+               UrlV2.asset_host(GCSTest.PublicUpload,
+                 asset_host: {:system, "WAFFLE_TEST_ASSET_HOST"}
+               )
+
+      with_env(:waffle, :asset_host, {:system, "WAFFLE_TEST_ASSET_HOST"}, fn ->
+        assert "https://env-cdn.example.com" == UrlV2.asset_host(GCSTest.PublicUpload)
+      end)
+    end
+
+    test "an unset {:system, var} selects the GCS endpoint" do
+      System.delete_env("WAFFLE_TEST_ASSET_HOST")
+
+      assert nil ==
+               UrlV2.asset_host(GCSTest.PublicUpload,
+                 asset_host: {:system, "WAFFLE_TEST_ASSET_HOST"}
+               )
+    end
+
+    test "false selects the GCS endpoint, per call and from config" do
+      assert nil == UrlV2.asset_host(GCSTest.WithAssetHost, asset_host: false)
+
+      with_env(:waffle, :asset_host, false, fn ->
+        assert nil == UrlV2.asset_host(GCSTest.PublicUpload)
+      end)
+    end
+
+    test "a nil per-call option falls through to the definition" do
+      assert "cdn.example.com" == UrlV2.asset_host(GCSTest.WithAssetHost, asset_host: nil)
+    end
+
+    test "is nil when nothing is configured" do
+      assert nil == UrlV2.asset_host(GCSTest.PublicUpload)
+    end
+  end
+
+  describe "build/4 with an asset host" do
+    test "serves the object path from the asset host without the bucket" do
+      assert "https://call-cdn.example.com/#{GCSTest.Run.storage_dir()}/image.png" ==
+               public_url("image.png", asset_host: "call-cdn.example.com")
+    end
+
+    test "keeps the scheme of a URL-shaped asset host and trims a trailing slash" do
+      assert "http://localhost:4000/files/#{GCSTest.Run.storage_dir()}/image.png" ==
+               public_url("image.png", asset_host: "http://localhost:4000/files/")
+    end
+
+    test "false serves from the GCS endpoint with the bucket" do
+      assert "https://storage.googleapis.com/#{@bucket}/#{GCSTest.Run.storage_dir()}/image.png" ==
+               public_url("image.png", asset_host: false)
     end
   end
 
@@ -124,7 +185,7 @@ defmodule Waffle.Storage.Google.UrlV2Test do
       meta = {%Waffle.File{file_name: "sig test.png"}, nil}
 
       url =
-        Waffle.GCSCase.with_env(:waffle, :bucket, @bucket, fn ->
+        with_env(:waffle, :bucket, @bucket, fn ->
           UrlV2.build(GCSTest.PublicUpload, :original, meta, signed: true, expires_in: 1234)
         end)
 
@@ -154,7 +215,7 @@ defmodule Waffle.Storage.Google.UrlV2Test do
       meta = {%Waffle.File{file_name: "v#2+100%?.png"}, nil}
 
       url =
-        Waffle.GCSCase.with_env(:waffle, :bucket, @bucket, fn ->
+        with_env(:waffle, :bucket, @bucket, fn ->
           UrlV2.build(GCSTest.PublicUpload, :original, meta, signed: true)
         end)
 
@@ -172,7 +233,7 @@ defmodule Waffle.Storage.Google.UrlV2Test do
       meta = {%Waffle.File{file_name: "image.png"}, nil}
 
       url =
-        Waffle.GCSCase.with_env(:waffle, :bucket, @bucket, fn ->
+        with_env(:waffle, :bucket, @bucket, fn ->
           UrlV2.build(GCSTest.PublicUpload, :original, meta, signed: true)
         end)
 
@@ -185,11 +246,11 @@ defmodule Waffle.Storage.Google.UrlV2Test do
     end
   end
 
-  defp public_url(file_name) do
+  defp public_url(file_name, options \\ []) do
     meta = {%Waffle.File{file_name: file_name}, nil}
 
-    Waffle.GCSCase.with_env(:waffle, :bucket, @bucket, fn ->
-      UrlV2.build(GCSTest.PublicUpload, :original, meta)
+    with_env(:waffle, :bucket, @bucket, fn ->
+      UrlV2.build(GCSTest.PublicUpload, :original, meta, options)
     end)
   end
 

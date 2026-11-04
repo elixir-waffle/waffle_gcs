@@ -198,11 +198,14 @@ defmodule Waffle.Integration.GCSFeaturesTest do
       assert url == "#{bucket_url()}/#{storage_dir()}/image.png"
     end
 
-    @tag :pending_asset_host
-    @tag upstream_mismatch: "UrlV2 should call definition.asset_host/0 like S3/Local adapters do"
     test "definition-level asset_host replaces the default endpoint" do
       url = GCSTest.WithAssetHost.url("image.png")
       assert url == "https://cdn.example.com/#{storage_dir()}/image.png"
+    end
+
+    test "per-call asset_host option overrides the definition callback" do
+      url = GCSTest.WithAssetHost.url("image.png", asset_host: "call-cdn.example.com")
+      assert url == "https://call-cdn.example.com/#{storage_dir()}/image.png"
     end
 
     test "app-level asset_host overrides the default endpoint" do
@@ -212,8 +215,6 @@ defmodule Waffle.Integration.GCSFeaturesTest do
       end)
     end
 
-    @tag :pending_asset_host
-    @tag upstream_mismatch: "S3/Local support {:system, var} asset_host values (with scheme)"
     test "app-level asset_host via {:system, env_var} tuple" do
       custom_asset_host = "https://some.cloudfront.com"
 
@@ -225,8 +226,6 @@ defmodule Waffle.Integration.GCSFeaturesTest do
       end)
     end
 
-    @tag :pending_asset_host
-    @tag upstream_mismatch: "S3/Local treat asset_host: false as 'use the default endpoint'"
     test "asset_host: false reverts to default GCS endpoint" do
       with_env(:waffle, :asset_host, false, fn ->
         assert "#{bucket_url()}/#{storage_dir()}/image.png" == GCSTest.PublicUpload.url(@img)

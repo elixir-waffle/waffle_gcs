@@ -20,11 +20,6 @@
 #     which needs goth >= 1.3's lazily-started Goth.Config. Excluded below on
 #     old-goth blend runs (see blend.exs).
 #
-# :pending_asset_host
-#     Correct-but-not-yet-implemented behavior, excluded unconditionally below.
-#     Each test asserts the *intended* behavior and fails today — run one with
-#     `mix test --include <tag>` to watch the corresponding fix progress.
-#
 # double_filename_regression: "..."
 #     The guard for issue #25 (filename/2 must be resolved exactly once per
 #     version during put). Run it explicitly with
@@ -43,11 +38,6 @@ Mix.ensure_application!(:ssl)
 {:ok, _} = Application.ensure_all_started([:inets, :ssl])
 
 lib_version = Mix.Project.config() |> Keyword.fetch!(:version)
-
-# Intended behavior that isn't implemented yet; see the tag taxonomy above.
-pending_behavior_excludes = [
-  :pending_asset_host
-]
 
 # Tags for tests that are to be ignored for 0.2.x versions for one reason or another.
 # See the individual tag for more information.
@@ -75,9 +65,7 @@ goth_pre_1_3? = Version.match?(to_string(Application.spec(:goth, :vsn)), "< 1.3.
 old_goth_excludes = if goth_pre_1_3?, do: [:integration, :goth_config_swap], else: []
 
 # Single configure call: a second `exclude:` would replace, not merge.
-ExUnit.configure(
-  exclude: pending_behavior_excludes ++ version_gated_excludes ++ old_goth_excludes
-)
+ExUnit.configure(exclude: version_gated_excludes ++ old_goth_excludes)
 
 ExUnit.start()
 
