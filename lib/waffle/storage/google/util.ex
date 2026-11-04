@@ -67,4 +67,18 @@ defmodule Waffle.Storage.Google.Util do
   """
   @spec encode_object_name(String.t()) :: String.t()
   def encode_object_name(name), do: URI.encode(name, &URI.char_unreserved?/1)
+
+  @doc """
+  Converts a keyword list or map into a map with string keys, so callers may
+  spell GCS field names as atoms or strings interchangeably.
+
+  ## Examples
+
+      iex> Waffle.Storage.Google.Util.stringify_keys(contentType: "image/png")
+      %{"contentType" => "image/png"}
+  """
+  @spec stringify_keys(Enumerable.t()) :: %{String.t() => term()}
+  def stringify_keys(enumerable) do
+    Map.new(enumerable, fn {key, value} -> {to_string(key), value} end)
+  end
 end

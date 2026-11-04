@@ -17,11 +17,10 @@ Storage, etc).
 ## What's Waffle GCS?
 
 Waffle GCS provides an integration between Waffle and Google Cloud Storage,
-built on the official
-[Google Cloud API client](https://hex.pm/packages/google_api_storage) for
-Elixir. If you want to easily upload and retrieve files using Google Cloud
-Storage as your provider, and you also use Waffle, then this library is for
-you.
+using a minimal built-in client for the
+[GCS JSON API](https://cloud.google.com/storage/docs/json_api). If you want to
+easily upload and retrieve files using Google Cloud Storage as your provider,
+and you also use Waffle, then this library is for you.
 
 ## Installation
 
@@ -111,7 +110,8 @@ def gcs_object_headers(_version, {_file, _scope}) do
 end
 ```
 
-The list of all the supported attributes can be found here: https://hexdocs.pm/google_api_storage/GoogleApi.Storage.V1.Model.Object.html.
+The attributes are sent as the upload's [object resource](https://cloud.google.com/storage/docs/json_api/v1/objects#resource-representations),
+which also documents the supported keys.
 
 When no `contentType` is given, it is inferred from the file's extension
 (e.g. `.png` → `image/png`); files with unknown extensions fall back to
@@ -127,7 +127,8 @@ def gcs_optional_params(_version, {_file, _scope}) do
 end
 ```
 
-It will be used as `optional_params` argument in gcs request. List of all supported attributes can be found here: https://hexdocs.pm/google_api_storage/GoogleApi.Storage.V1.Api.Objects.html#storage_objects_insert_simple/7
+These are sent as query parameters on the upload request; the supported
+parameters are documented on [objects.insert](https://cloud.google.com/storage/docs/json_api/v1/objects/insert#parameters).
 
 ## Running the tests
 

@@ -65,7 +65,7 @@ forward-port-to-main.md §5.
 
 Extract request construction into pure functions returning data — object name,
 acl/predefinedAcl mapping (#27), headers merge, multipart-vs-iodata choice —
-and unit-test them exhaustively with no network at all. This is the same seam
+and unit-test them exhaustively with no network at all. This is the same swappable network layer
 the client rewrite's transport layer needs
 ([client-rewrite.md](client-rewrite.md)); building it here means the rewrite
 inherits tests instead of writing them.
