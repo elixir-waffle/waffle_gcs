@@ -198,11 +198,14 @@ defmodule Waffle.Integration.GCSFeaturesTest do
       assert url == "#{bucket_url()}/#{storage_dir()}/image.png"
     end
 
-    @tag :pending_asset_host
-    @tag upstream_mismatch: "UrlV2 should call definition.asset_host/0 like S3/Local adapters do"
     test "definition-level asset_host replaces the default endpoint" do
       url = GCSTest.WithAssetHost.url("image.png")
       assert url == "https://cdn.example.com/#{storage_dir()}/image.png"
+    end
+
+    test "per-call asset_host option overrides the definition callback" do
+      url = GCSTest.WithAssetHost.url("image.png", asset_host: "call-cdn.example.com")
+      assert url == "https://call-cdn.example.com/#{storage_dir()}/image.png"
     end
 
     test "app-level asset_host overrides the default endpoint" do
@@ -212,8 +215,6 @@ defmodule Waffle.Integration.GCSFeaturesTest do
       end)
     end
 
-    @tag :pending_asset_host
-    @tag upstream_mismatch: "S3/Local support {:system, var} asset_host values (with scheme)"
     test "app-level asset_host via {:system, env_var} tuple" do
       custom_asset_host = "https://some.cloudfront.com"
 
@@ -225,8 +226,6 @@ defmodule Waffle.Integration.GCSFeaturesTest do
       end)
     end
 
-    @tag :pending_asset_host
-    @tag upstream_mismatch: "S3/Local treat asset_host: false as 'use the default endpoint'"
     test "asset_host: false reverts to default GCS endpoint" do
       with_env(:waffle, :asset_host, false, fn ->
         assert "#{bucket_url()}/#{storage_dir()}/image.png" == GCSTest.PublicUpload.url(@img)
@@ -238,11 +237,6 @@ defmodule Waffle.Integration.GCSFeaturesTest do
       assert url == "#{bucket_url()}/#{storage_dir()}/image%20two.png"
     end
 
-    # NOTE: an unencoded "+" is legal in a URL *path* segment, so %2B here is
-    # S3-adapter parity, not a GCS requirement — the URL-encoding fix should
-    # decide this deliberately.
-    @tag :pending_url_encoding
-    @tag upstream_mismatch: "S3 adapter percent-encodes '+' in object paths"
     test "URL-encodes filenames with plus signs" do
       url = GCSTest.PublicUpload.url(@img_with_plus)
       assert url == "#{bucket_url()}/#{storage_dir()}/image%2Bthree.png"
@@ -254,22 +248,20 @@ defmodule Waffle.Integration.GCSFeaturesTest do
       assert url =~ "Signature="
     end
 
-    # GCS validates a v2 signature against the canonical resource
-    # "/<bucket>/<object>". With an asset_host configured, the URL builder
-    # drops the bucket segment, so the signer signs "/<object>" — a resource
-    # GCS will never agree with. The URL looks fine and returns 403 forever.
-    # Until the fix decides between signing the real GCS resource or refusing
-    # the combination, this test only pins the current output shape so a
-    # refactor can't change it unnoticed.
-    @tag upstream_mismatch:
-           "signs '/<object>' instead of '/<bucket>/<object>' when asset_host is set"
-    test "signed URL with asset_host is well-formed but its signature cannot validate" do
-      with_env(:waffle, :asset_host, "app-cdn.example.com", fn ->
-        url = GCSTest.PublicUpload.url("image.png", signed: true)
+    @tag timeout: 15_000
+    test "signed URLs ignore the asset host and are issued for the GCS endpoint", meta do
+      assert {:ok, name} = GCSTest.PrivateUpload.store(meta.tmp_path)
 
-        assert url =~ "https://app-cdn.example.com/#{storage_dir()}/image.png"
-        assert url =~ "Signature="
+      with_env(:waffle, :asset_host, "app-cdn.example.com", fn ->
+        {url, log} =
+          ExUnit.CaptureLog.with_log(fn -> GCSTest.PrivateUpload.url(name, signed: true) end)
+
+        assert log =~ "ignoring asset_host"
+        assert String.starts_with?(url, "#{bucket_url()}/#{storage_dir()}/#{name}?")
+        assert {:ok, {{_, 200, _}, _, _}} = :httpc.request(to_charlist(url))
       end)
+
+      delete_and_assert_gone(GCSTest.PrivateUpload, name)
     end
   end
 
@@ -315,9 +307,6 @@ defmodule Waffle.Integration.GCSFeaturesTest do
       delete_and_assert_gone(GCSTest.PublicUpload, name)
     end
 
-    @tag :pending_url_encoding
-    @tag upstream_mismatch:
-           "URI.encode/1 leaves # unencoded, so the URL truncates at the fragment"
     @tag timeout: 15_000
     test "round-trips a filename containing a hash", meta do
       path = stage_fixture(meta, "#{meta.unique_basename}_v#2.png")
@@ -325,6 +314,24 @@ defmodule Waffle.Integration.GCSFeaturesTest do
       assert {:ok, name} = GCSTest.PublicUpload.store(path)
       assert_public(GCSTest.PublicUpload, name)
       delete_and_assert_gone(GCSTest.PublicUpload, name)
+    end
+
+    @tag timeout: 15_000
+    test "round-trips a filename containing a question mark", meta do
+      path = stage_fixture(meta, "#{meta.unique_basename}_what?.png")
+
+      assert {:ok, name} = GCSTest.PublicUpload.store(path)
+      assert_public(GCSTest.PublicUpload, name)
+      delete_and_assert_gone(GCSTest.PublicUpload, name)
+    end
+
+    @tag timeout: 15_000
+    test "signs the encoded path for a filename with reserved characters", meta do
+      path = stage_fixture(meta, "#{meta.unique_basename} v#2+100%?.png")
+
+      assert {:ok, name} = GCSTest.PrivateUpload.store(path)
+      assert_private(GCSTest.PrivateUpload, name)
+      delete_and_assert_gone(GCSTest.PrivateUpload, name)
     end
   end
 
