@@ -238,11 +238,6 @@ defmodule Waffle.Integration.GCSFeaturesTest do
       assert url == "#{bucket_url()}/#{storage_dir()}/image%20two.png"
     end
 
-    # NOTE: an unencoded "+" is legal in a URL *path* segment, so %2B here is
-    # S3-adapter parity, not a GCS requirement — the URL-encoding fix should
-    # decide this deliberately.
-    @tag :pending_url_encoding
-    @tag upstream_mismatch: "S3 adapter percent-encodes '+' in object paths"
     test "URL-encodes filenames with plus signs" do
       url = GCSTest.PublicUpload.url(@img_with_plus)
       assert url == "#{bucket_url()}/#{storage_dir()}/image%2Bthree.png"
@@ -315,9 +310,6 @@ defmodule Waffle.Integration.GCSFeaturesTest do
       delete_and_assert_gone(GCSTest.PublicUpload, name)
     end
 
-    @tag :pending_url_encoding
-    @tag upstream_mismatch:
-           "URI.encode/1 leaves # unencoded, so the URL truncates at the fragment"
     @tag timeout: 15_000
     test "round-trips a filename containing a hash", meta do
       path = stage_fixture(meta, "#{meta.unique_basename}_v#2.png")
@@ -325,6 +317,24 @@ defmodule Waffle.Integration.GCSFeaturesTest do
       assert {:ok, name} = GCSTest.PublicUpload.store(path)
       assert_public(GCSTest.PublicUpload, name)
       delete_and_assert_gone(GCSTest.PublicUpload, name)
+    end
+
+    @tag timeout: 15_000
+    test "round-trips a filename containing a question mark", meta do
+      path = stage_fixture(meta, "#{meta.unique_basename}_what?.png")
+
+      assert {:ok, name} = GCSTest.PublicUpload.store(path)
+      assert_public(GCSTest.PublicUpload, name)
+      delete_and_assert_gone(GCSTest.PublicUpload, name)
+    end
+
+    @tag timeout: 15_000
+    test "signs the encoded path for a filename with reserved characters", meta do
+      path = stage_fixture(meta, "#{meta.unique_basename} v#2+100%?.png")
+
+      assert {:ok, name} = GCSTest.PrivateUpload.store(path)
+      assert_private(GCSTest.PrivateUpload, name)
+      delete_and_assert_gone(GCSTest.PrivateUpload, name)
     end
   end
 

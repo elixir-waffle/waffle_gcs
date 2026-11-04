@@ -84,6 +84,12 @@ for step-by-step upgrade instructions.
   GCS instead of downloading, because a content type is stored with the object
   ([#43](https://github.com/elixir-waffle/waffle_gcs/issues/43),
   [#45](https://github.com/elixir-waffle/waffle_gcs/pull/45))
+- Filenames containing `#`, `?`, `%`, or `+` now produce working URLs, signed
+  and unsigned: every reserved character in the object path is
+  percent-encoded per segment (`+` becomes `%2B`, matching the S3 adapter).
+  Previously `URI.encode/1` left `#` and `?` alone, so the object name was
+  truncated at the fragment or query
+  ([#31](https://github.com/elixir-waffle/waffle_gcs/issues/31))
 
 ## [0.2.0] - 2021-08-20
 

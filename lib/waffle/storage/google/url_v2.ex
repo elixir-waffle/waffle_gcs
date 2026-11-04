@@ -105,7 +105,7 @@ defmodule Waffle.Storage.Google.UrlV2 do
 
     path
     |> Util.prepend_slash()
-    |> URI.encode()
+    |> Util.encode_path()
   end
 
   @spec bucket_and_path(Types.definition(), Types.meta(), String.t()) :: String.t()

@@ -20,7 +20,7 @@
 #     which needs goth >= 1.3's lazily-started Goth.Config. Excluded below on
 #     old-goth blend runs (see blend.exs).
 #
-# :pending_asset_host, :pending_url_encoding
+# :pending_asset_host
 #     Correct-but-not-yet-implemented behavior, excluded unconditionally below.
 #     Each test asserts the *intended* behavior and fails today — run one with
 #     `mix test --include <tag>` to watch the corresponding fix progress.
@@ -46,8 +46,7 @@ lib_version = Mix.Project.config() |> Keyword.fetch!(:version)
 
 # Intended behavior that isn't implemented yet; see the tag taxonomy above.
 pending_behavior_excludes = [
-  :pending_asset_host,
-  :pending_url_encoding
+  :pending_asset_host
 ]
 
 # Tags for tests that are to be ignored for 0.2.x versions for one reason or another.

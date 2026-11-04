@@ -5,6 +5,8 @@ defmodule Waffle.Storage.Google.UrlV2Test do
 
   alias Waffle.Storage.Google.UrlV2
 
+  @bucket "url-v2-test-bucket"
+
   describe "expiry/1" do
     test "returns a default value when option is not found" do
       assert 3600 == UrlV2.expiry()
@@ -48,6 +50,24 @@ defmodule Waffle.Storage.Google.UrlV2Test do
     end
   end
 
+  describe "build/4 path encoding" do
+    test "keeps / separators and encodes everything else per segment" do
+      assert public_url("report#final?.png") ==
+               "https://storage.googleapis.com/#{@bucket}/#{GCSTest.Run.storage_dir()}/report%23final%3F.png"
+    end
+
+    test "encodes +, %, and spaces" do
+      assert public_url("a+b 100%.png") ==
+               "https://storage.googleapis.com/#{@bucket}/#{GCSTest.Run.storage_dir()}/a%2Bb%20100%25.png"
+    end
+
+    test "round-trips through URI.parse to the original object name" do
+      %URI{path: path, query: nil, fragment: nil} = URI.parse(public_url("report#final?.png"))
+
+      assert URI.decode(path) == "/#{@bucket}/#{GCSTest.Run.storage_dir()}/report#final?.png"
+    end
+  end
+
   describe "build/4 with signed: true" do
     # Deterministic and offline: a throwaway RSA key stands in for the
     # service account, and the signature is verified cryptographically
@@ -61,7 +81,6 @@ defmodule Waffle.Storage.Google.UrlV2Test do
     @describetag :goth_config_swap
 
     @client_email "url-v2-signing-test@example.iam.gserviceaccount.com"
-    @bucket "signing-test-bucket"
 
     setup do
       key = :public_key.generate_key({:rsa, 2048, 65_537})
@@ -131,6 +150,24 @@ defmodule Waffle.Storage.Google.UrlV2Test do
       assert :public_key.verify(canonical, :sha256, signature, ctx.public_key)
     end
 
+    test "signs the percent-encoded resource for reserved characters", ctx do
+      meta = {%Waffle.File{file_name: "v#2+100%?.png"}, nil}
+
+      url =
+        Waffle.GCSCase.with_env(:waffle, :bucket, @bucket, fn ->
+          UrlV2.build(GCSTest.PublicUpload, :original, meta, signed: true)
+        end)
+
+      assert %URI{path: path, query: query, fragment: nil} = URI.parse(url)
+      assert path == "/#{@bucket}/#{GCSTest.Run.storage_dir()}/v%232%2B100%25%3F.png"
+
+      q = URI.decode_query(query)
+      canonical = "GET\n\n\n#{q["Expires"]}\n#{path}"
+      signature = Base.decode64!(q["Signature"])
+
+      assert :public_key.verify(canonical, :sha256, signature, ctx.public_key)
+    end
+
     test "tampered canonical request does not verify", ctx do
       meta = {%Waffle.File{file_name: "image.png"}, nil}
 
@@ -146,6 +183,14 @@ defmodule Waffle.Storage.Google.UrlV2Test do
       tampered = "GET\n\n\n#{q["Expires"]}\n#{path}x"
       refute :public_key.verify(tampered, :sha256, signature, ctx.public_key)
     end
+  end
+
+  defp public_url(file_name) do
+    meta = {%Waffle.File{file_name: file_name}, nil}
+
+    Waffle.GCSCase.with_env(:waffle, :bucket, @bucket, fn ->
+      UrlV2.build(GCSTest.PublicUpload, :original, meta)
+    end)
   end
 
   defp stop_goth_config do
