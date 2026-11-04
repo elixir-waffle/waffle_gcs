@@ -24,11 +24,6 @@
 #     The guard for issue #25 (filename/2 must be resolved exactly once per
 #     version during put). Run it explicitly with
 #     `mix test --include double_filename_regression`.
-#
-# upstream_mismatch: "..."
-#     Informational marker for divergence from the upstream Waffle S3/Local
-#     adapters (a parity bug to reconcile later). Paired with an exclude tag
-#     when the test would fail today, so the suite stays green.
 # ─────────────────────────────────────────────────────────────────────────────
 
 # :httpc (inets) drives the URL probes in GCSCase. Mix prunes undeclared OTP

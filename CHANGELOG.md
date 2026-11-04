@@ -52,6 +52,14 @@ for step-by-step upgrade instructions.
   [#46](https://github.com/elixir-waffle/waffle_gcs/pull/46)). **Behavior
   change** if a definition already overrides `bucket/1`: it was previously
   ignored by this adapter. See [UPGRADING.md](UPGRADING.md#bucket1-overrides-are-now-honored).
+- **Breaking:** signed URLs (`signed: true`) are always issued for
+  `storage.googleapis.com/<bucket>/<object>`; a configured `asset_host` is
+  ignored for them, with a `Logger` warning
+  ([#29](https://github.com/elixir-waffle/waffle_gcs/issues/29)). Previously
+  the asset host was used, the bucket was dropped from the signed resource,
+  and the resulting URL always failed with 403, since v2 signatures are
+  verified against `/<bucket>/<object>` on GCS itself. See
+  [UPGRADING.md](UPGRADING.md#signed-urls-ignore-asset_host).
 - `asset_host` is now resolved like the S3 adapter does, with a per-call
   option in front: `definition.url(file, asset_host: "cdn.example.com")`,
   then the definition's `asset_host/0` callback, then

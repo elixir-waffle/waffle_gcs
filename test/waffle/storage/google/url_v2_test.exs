@@ -229,6 +229,28 @@ defmodule Waffle.Storage.Google.UrlV2Test do
       assert :public_key.verify(canonical, :sha256, signature, ctx.public_key)
     end
 
+    test "ignores the asset host, signs the GCS resource, and warns", ctx do
+      meta = {%Waffle.File{file_name: "image.png"}, nil}
+
+      {url, log} =
+        with_env(:waffle, :bucket, @bucket, fn ->
+          ExUnit.CaptureLog.with_log(fn ->
+            UrlV2.build(GCSTest.WithAssetHost, :original, meta, signed: true)
+          end)
+        end)
+
+      assert log =~ ~s(ignoring asset_host "cdn.example.com")
+
+      assert %URI{host: "storage.googleapis.com", path: path, query: query} = URI.parse(url)
+      assert path == "/#{@bucket}/#{GCSTest.Run.storage_dir()}/image.png"
+
+      q = URI.decode_query(query)
+      canonical = "GET\n\n\n#{q["Expires"]}\n#{path}"
+      signature = Base.decode64!(q["Signature"])
+
+      assert :public_key.verify(canonical, :sha256, signature, ctx.public_key)
+    end
+
     test "tampered canonical request does not verify", ctx do
       meta = {%Waffle.File{file_name: "image.png"}, nil}
 

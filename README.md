@@ -119,6 +119,10 @@ hour but can be changed by setting the `:expires_in` config/option value. The
 value is **the number of seconds** the URL should remain valid for after
 generation.
 
+Signed URLs are always issued for `storage.googleapis.com`; an asset host is
+ignored for them (and a warning is logged), since v2 signatures are verified
+against the bucket and object on GCS itself.
+
 ## GCS object headers
 
 You can specify custom object headers by defining `gcs_object_headers/2` in your definition which returns keyword list or map. E.g.

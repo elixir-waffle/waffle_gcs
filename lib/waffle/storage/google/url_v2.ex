@@ -10,6 +10,8 @@ defmodule Waffle.Storage.Google.UrlV2 do
 
   use Waffle.Storage.Google.Url
 
+  require Logger
+
   alias Waffle.Types
   alias Waffle.Storage.Google.{CloudStorage, Util}
 
@@ -82,14 +84,13 @@ defmodule Waffle.Storage.Google.UrlV2 do
 
   @spec build_url(Types.definition(), Types.meta(), String.t(), Keyword.t()) :: String.t()
   defp build_url(definition, meta, path, options) do
-    base_url(definition, options) <> build_path(definition, meta, path, options)
-  end
-
-  @spec base_url(Types.definition(), Keyword.t()) :: String.t()
-  defp base_url(definition, options) do
     case asset_host(definition, options) do
-      nil -> "https://#{@endpoint}"
-      host -> host |> with_scheme() |> String.trim_trailing("/")
+      nil ->
+        "https://#{@endpoint}" <> canonical_resource(definition, meta, path)
+
+      host ->
+        base = host |> with_scheme() |> String.trim_trailing("/")
+        base <> Util.encode_path(Util.prepend_slash(path))
     end
   end
 
@@ -100,39 +101,33 @@ defmodule Waffle.Storage.Google.UrlV2 do
 
   @spec build_signed_url(Types.definition(), Types.meta(), String.t(), Keyword.t()) :: String.t()
   defp build_signed_url(definition, meta, path, options) do
+    if host = asset_host(definition, options) do
+      Logger.warning(
+        "waffle_gcs: signed URLs are issued for #{@endpoint}; ignoring asset_host #{inspect(host)} " <>
+          "(v2 signing does not support custom domains)"
+      )
+    end
+
     {:ok, client_id} = Goth.Config.get(:client_email)
 
     expiration = System.os_time(:second) + expiry(options)
+    resource = canonical_resource(definition, meta, path)
 
     signature =
-      definition
-      |> build_path(meta, path, options)
+      resource
       |> canonical_request(expiration)
       |> sign_request()
 
-    base_url = build_url(definition, meta, path, options)
-
-    "#{base_url}?GoogleAccessId=#{client_id}&Expires=#{expiration}&Signature=#{signature}"
+    "https://#{@endpoint}#{resource}?GoogleAccessId=#{client_id}&Expires=#{expiration}&Signature=#{signature}"
   end
 
-  @spec build_path(Types.definition(), Types.meta(), String.t(), Keyword.t()) :: String.t()
-  defp build_path(definition, meta, path, options) do
-    path =
-      case asset_host(definition, options) do
-        nil -> bucket_and_path(definition, meta, path)
-        _host -> path
-      end
-
-    path
-    |> Util.prepend_slash()
-    |> Util.encode_path()
-  end
-
-  @spec bucket_and_path(Types.definition(), Types.meta(), String.t()) :: String.t()
-  defp bucket_and_path(definition, meta, path) do
+  @spec canonical_resource(Types.definition(), Types.meta(), String.t()) :: String.t()
+  defp canonical_resource(definition, meta, path) do
     definition
     |> CloudStorage.bucket(meta)
     |> Path.join(path)
+    |> Util.prepend_slash()
+    |> Util.encode_path()
   end
 
   @spec canonical_request(String.t(), pos_integer) :: String.t()

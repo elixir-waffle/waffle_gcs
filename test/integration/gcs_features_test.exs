@@ -248,22 +248,20 @@ defmodule Waffle.Integration.GCSFeaturesTest do
       assert url =~ "Signature="
     end
 
-    # GCS validates a v2 signature against the canonical resource
-    # "/<bucket>/<object>". With an asset_host configured, the URL builder
-    # drops the bucket segment, so the signer signs "/<object>" — a resource
-    # GCS will never agree with. The URL looks fine and returns 403 forever.
-    # Until the fix decides between signing the real GCS resource or refusing
-    # the combination, this test only pins the current output shape so a
-    # refactor can't change it unnoticed.
-    @tag upstream_mismatch:
-           "signs '/<object>' instead of '/<bucket>/<object>' when asset_host is set"
-    test "signed URL with asset_host is well-formed but its signature cannot validate" do
-      with_env(:waffle, :asset_host, "app-cdn.example.com", fn ->
-        url = GCSTest.PublicUpload.url("image.png", signed: true)
+    @tag timeout: 15_000
+    test "signed URLs ignore the asset host and are issued for the GCS endpoint", meta do
+      assert {:ok, name} = GCSTest.PrivateUpload.store(meta.tmp_path)
 
-        assert url =~ "https://app-cdn.example.com/#{storage_dir()}/image.png"
-        assert url =~ "Signature="
+      with_env(:waffle, :asset_host, "app-cdn.example.com", fn ->
+        {url, log} =
+          ExUnit.CaptureLog.with_log(fn -> GCSTest.PrivateUpload.url(name, signed: true) end)
+
+        assert log =~ "ignoring asset_host"
+        assert String.starts_with?(url, "#{bucket_url()}/#{storage_dir()}/#{name}?")
+        assert {:ok, {{_, 200, _}, _, _}} = :httpc.request(to_charlist(url))
       end)
+
+      delete_and_assert_gone(GCSTest.PrivateUpload, name)
     end
   end
 
