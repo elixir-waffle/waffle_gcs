@@ -65,7 +65,7 @@ jobs:
 
     - name: Restore dependencies cache
       if: ${{ !matrix.blend }}
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       id: mix-cache
       with:
         path: deps
@@ -76,7 +76,7 @@ jobs:
     # cache that path keyed on the blend's own lockfile.
     - name: Restore blend dependencies cache
       if: ${{ matrix.blend }}
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: blend/${{ matrix.blend }}/deps
         key: ${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-blend-${{ matrix.blend }}-${{ hashFiles(format('blend/{0}/mix.lock', matrix.blend)) }}
@@ -119,7 +119,7 @@ jobs:
         otp-version: '29'
 
     - name: Restore dependencies cache
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: deps
         key: ${{ runner.os }}-29-1.20-mix-dev-${{ hashFiles('mix.lock') }}
@@ -169,7 +169,7 @@ jobs:
         otp-version: ${{ matrix.otp }}
 
     - name: Restore dependencies cache
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       id: mix-cache
       with:
         path: deps
