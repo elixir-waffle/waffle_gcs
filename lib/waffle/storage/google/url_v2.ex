@@ -84,20 +84,31 @@ defmodule Waffle.Storage.Google.UrlV2 do
 
   @spec build_url(Types.definition(), Types.meta(), String.t(), Keyword.t()) :: String.t()
   defp build_url(definition, meta, path, options) do
-    case asset_host(definition, options) do
-      nil ->
-        "https://#{@endpoint}" <> canonical_resource(definition, meta, path)
+    uri =
+      case asset_host(definition, options) do
+        nil ->
+          definition |> canonical_resource(meta, path) |> endpoint_uri()
 
-      host ->
-        base = host |> with_scheme() |> String.trim_trailing("/")
-        base <> Util.encode_path(Util.prepend_slash(path))
-    end
+        host ->
+          object_path = path |> Util.prepend_slash() |> Util.encode_path()
+          host |> asset_uri() |> URI.append_path(object_path)
+      end
+
+    URI.to_string(uri)
   end
 
-  @spec with_scheme(String.t()) :: String.t()
-  defp with_scheme("http://" <> _ = url), do: url
-  defp with_scheme("https://" <> _ = url), do: url
-  defp with_scheme(host), do: "https://" <> host
+  @spec endpoint_uri(String.t()) :: URI.t()
+  defp endpoint_uri(resource), do: %URI{scheme: "https", host: @endpoint, path: resource}
+
+  # URI.parse/1 reads a bare "host:port" as scheme "host", so only http(s)
+  # values count as already carrying a scheme.
+  @spec asset_uri(String.t()) :: URI.t()
+  defp asset_uri(host) do
+    case URI.parse(host) do
+      %URI{scheme: scheme} = uri when scheme in ["http", "https"] -> uri
+      _ -> URI.parse("https://" <> host)
+    end
+  end
 
   @spec build_signed_url(Types.definition(), Types.meta(), String.t(), Keyword.t()) :: String.t()
   defp build_signed_url(definition, meta, path, options) do
@@ -118,7 +129,12 @@ defmodule Waffle.Storage.Google.UrlV2 do
       |> canonical_request(expiration)
       |> sign_request()
 
-    "https://#{@endpoint}#{resource}?GoogleAccessId=#{client_id}&Expires=#{expiration}&Signature=#{signature}"
+    query = URI.encode_query(GoogleAccessId: client_id, Expires: expiration, Signature: signature)
+
+    resource
+    |> endpoint_uri()
+    |> URI.append_query(query)
+    |> URI.to_string()
   end
 
   @spec canonical_resource(Types.definition(), Types.meta(), String.t()) :: String.t()
@@ -154,6 +170,5 @@ defmodule Waffle.Storage.Google.UrlV2 do
     request
     |> :public_key.sign(:sha256, rsa_key)
     |> Base.encode64()
-    |> URI.encode_www_form()
   end
 end

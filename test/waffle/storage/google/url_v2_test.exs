@@ -105,6 +105,11 @@ defmodule Waffle.Storage.Google.UrlV2Test do
                public_url("image.png", asset_host: "http://localhost:4000/files/")
     end
 
+    test "serves a bare host with a port over https" do
+      assert "https://cdn.example.com:8443/#{GCSTest.Run.storage_dir()}/image.png" ==
+               public_url("image.png", asset_host: "cdn.example.com:8443")
+    end
+
     test "false serves from the GCS endpoint with the bucket" do
       assert "https://storage.googleapis.com/#{@bucket}/#{GCSTest.Run.storage_dir()}/image.png" ==
                public_url("image.png", asset_host: false)
