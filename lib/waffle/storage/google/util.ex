@@ -69,6 +69,22 @@ defmodule Waffle.Storage.Google.Util do
   def encode_object_name(name), do: URI.encode(name, &URI.char_unreserved?/1)
 
   @doc """
+  Percent-encodes an object path for use in a public URL. Each `/`-separated
+  segment is encoded like `encode_object_name/1`; the separators are kept.
+
+  ## Examples
+
+      iex> Waffle.Storage.Google.Util.encode_path("uploads/img #1.png")
+      "uploads/img%20%231.png"
+  """
+  @spec encode_path(String.t()) :: String.t()
+  def encode_path(path) do
+    path
+    |> String.split("/")
+    |> Enum.map_join("/", &encode_object_name/1)
+  end
+
+  @doc """
   Converts a keyword list or map into a map with string keys, so callers may
   spell GCS field names as atoms or strings interchangeably.
 

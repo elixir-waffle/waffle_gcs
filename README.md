@@ -90,6 +90,25 @@ config :waffle,
   token_fetcher: Waffle.Storage.Google.Token.GothTokenFetcher
 ```
 
+## Asset host
+
+Unsigned URLs point at `https://storage.googleapis.com/<bucket>/<object>` by
+default. To serve them from a CDN or custom domain instead, set an asset host
+app-wide, per definition, or per call (listed from lowest to highest
+precedence):
+
+```elixir
+config :waffle, asset_host: "cdn.example.com"
+
+def asset_host, do: "cdn.example.com"
+
+MyApp.Avatar.url({file, scope}, asset_host: "https://cdn.example.com")
+```
+
+The bucket is left out of the path on an asset host, so the host is expected
+to map to the bucket. A value without a scheme is served over `https`;
+`false` selects the default endpoint.
+
 ## URL Signing
 
 If your bucket/object permissions do not allow for public access, you will need
@@ -99,6 +118,10 @@ configs (`config :waffle, signed: true`). The default expiration time is one
 hour but can be changed by setting the `:expires_in` config/option value. The
 value is **the number of seconds** the URL should remain valid for after
 generation.
+
+Signed URLs are always issued for `storage.googleapis.com`; an asset host is
+ignored for them (and a warning is logged), since v2 signatures are verified
+against the bucket and object on GCS itself.
 
 ## GCS object headers
 

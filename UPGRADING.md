@@ -114,6 +114,51 @@ export it.
 Definitions without a `bucket/1` override are unaffected — waffle's default
 `bucket/1` delegates to `bucket/0`.
 
+### `asset_host/0` overrides are now honored
+
+URLs can now be served from a CDN or custom domain per call or per
+definition, matching the S3 adapter:
+
+```elixir
+MyApp.Avatar.url({file, scope}, asset_host: "cdn.example.com")
+
+defmodule MyApp.Avatar do
+  use Waffle.Definition
+  def asset_host, do: "cdn.example.com"
+end
+```
+
+Resolution order is the per-call `:asset_host` option, then the
+definition's `asset_host/0`, then `config :waffle, asset_host:` (which is
+what waffle's default `asset_host/0` returns). `false` means "serve from
+`storage.googleapis.com`", and a value without a scheme is served over
+`https`.
+
+Previously only the app config was consulted. **Check before upgrading:**
+if any of your definitions define `asset_host/0` (perhaps copied from
+S3-oriented docs, or shared with an S3-backed app), generated URLs will now
+use that host instead of the app-wide one. Remove the override, or make it
+return `nil` to fall back to the app config.
+
+`Waffle.Storage.Google.UrlV2.endpoint/1` is replaced by
+`UrlV2.asset_host/2`, which takes the definition and returns `nil` when no
+asset host is configured.
+
+### Signed URLs ignore `asset_host`
+
+`url(file, signed: true)` now always returns a
+`https://storage.googleapis.com/<bucket>/<object>?GoogleAccessId=...` URL,
+whatever `asset_host` resolves to, and logs a warning when one was set.
+Unsigned URLs on the same definition still use the asset host.
+
+Previously the signed URL was built on the asset host with the bucket left
+out of the signed resource, so it could never validate: GCS checks a v2
+signature against `/<bucket>/<object>` and a CDN hostname cannot stand in
+for that. If you were generating such URLs, they were returning 403; nothing
+else changes. If you need signed access through a custom domain, that is v4
+signing territory
+([#14](https://github.com/elixir-waffle/waffle_gcs/issues/14)).
+
 ### Content type is now inferred on upload
 
 Objects uploaded without an explicit content type used to be stored as
